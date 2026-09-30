@@ -1,6 +1,8 @@
 #env
 .env
 .env.*
+!.env.example
+!*.env.example
 
 # Logs
 /logs
@@ -30,3 +32,9 @@ dist-ssr
 .env
 .vite
 base44/.app.jsonc
+
+# Python
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite3

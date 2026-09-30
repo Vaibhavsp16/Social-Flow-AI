@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: brim_ai_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-brim_ai_db}
+      POSTGRES_USER: ${POSTGRES_USER:-brim_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brim_password_2026}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-brim_user} -d ${POSTGRES_DB:-brim_ai_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local

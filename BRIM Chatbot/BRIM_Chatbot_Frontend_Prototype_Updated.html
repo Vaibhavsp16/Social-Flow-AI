@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>BRIM — AI Chatbot Platform Prototype</title>
+<style>
+:root{--bg:#f7f8fc;--panel:#fff;--text:#171a24;--muted:#737887;--line:#e7e9f0;--brand:#5b5ce2;--brand2:#4748c7;--soft:#eef0ff;--success:#138a5b;--danger:#c64b4b;--shadow:0 10px 30px rgba(24,28,45,.07);--radius:14px}*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text);background:var(--bg)}button,input,textarea,select{font:inherit}button{cursor:pointer}.hidden{display:none!important}.app{min-height:100vh}.login{min-height:100vh;display:grid;grid-template-columns:1.1fr .9fr;background:#fff}.login-left{padding:70px 8vw;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,#f1f2ff,#fff)}.logo{font-weight:800;font-size:24px;letter-spacing:-.5px}.logo span{color:var(--brand)}.login-left h1{font-size:46px;line-height:1.08;max-width:620px;margin:55px 0 20px}.login-left p{font-size:18px;color:var(--muted);max-width:570px;line-height:1.6}.feature-row{display:flex;gap:12px;margin-top:34px;flex-wrap:wrap}.pill{padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:999px;font-size:13px}.login-right{display:flex;align-items:center;justify-content:center;padding:40px}.auth-card{width:100%;max-width:430px;background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:18px;padding:34px}.auth-card h2{margin:0 0 8px;font-size:26px}.muted{color:var(--muted)}.field{margin:18px 0}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:7px}.field input,.field textarea,.field select{width:100%;border:1px solid #dfe2eb;border-radius:9px;padding:12px 13px;outline:none;background:#fff}.field input:focus,.field textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(91,92,226,.1)}.btn{border:0;border-radius:9px;padding:11px 16px;font-weight:650}.primary{background:var(--brand);color:#fff}.primary:hover{background:var(--brand2)}.secondary{background:#fff;border:1px solid var(--line)}.full{width:100%}.topbar{height:66px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:5}.top-actions{display:flex;align-items:center;gap:14px}.avatar{width:34px;height:34px;border-radius:50%;background:var(--soft);color:var(--brand);display:grid;place-items:center;font-weight:750}.layout{display:grid;grid-template-columns:230px 1fr;min-height:calc(100vh - 66px)}.sidebar{background:#fff;border-right:1px solid var(--line);padding:20px 12px}.nav-title{font-size:11px;text-transform:uppercase;color:#9a9eaa;font-weight:750;padding:12px 10px 7px}.nav button{width:100%;text-align:left;border:0;background:transparent;padding:10px 12px;border-radius:8px;color:#555a68;margin:2px 0}.nav button.active,.nav button:hover{background:var(--soft);color:var(--brand);font-weight:650}.main{padding:30px;max-width:1350px;width:100%;margin:auto}.page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}.page-head h1{margin:0;font-size:28px;letter-spacing:-.5px}.page-head p{margin:6px 0 0}.grid{display:grid;gap:16px}.stats{grid-template-columns:repeat(4,1fr)}.stat,.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:0 2px 10px rgba(30,35,50,.02)}.stat .label{color:var(--muted);font-size:13px}.stat .value{font-size:28px;font-weight:760;margin-top:8px}.stat .delta{font-size:12px;color:var(--success);margin-top:5px}.bots{grid-template-columns:repeat(3,1fr);margin-top:22px}.bot-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;cursor:pointer;transition:.15s}.bot-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}.bot-head{display:flex;gap:12px;align-items:center}.bot-icon{width:42px;height:42px;border-radius:11px;background:var(--soft);display:grid;place-items:center;color:var(--brand);font-weight:800}.bot-card h3{margin:0;font-size:16px}.bot-card p{margin:4px 0;color:var(--muted);font-size:12px}.bot-meta{display:flex;gap:18px;color:var(--muted);font-size:12px;margin-top:18px}.status{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:5px 8px;border-radius:999px;background:#eaf8f1;color:var(--success);font-weight:650}.dot{width:6px;height:6px;background:currentColor;border-radius:50%}.empty{padding:45px;text-align:center;color:var(--muted)}.wizard{max-width:900px;margin:auto}.steps{display:flex;gap:8px;margin-bottom:25px}.step{flex:1;padding:10px;border-radius:8px;background:#eceef4;color:#8a8e9a;font-size:12px;text-align:center}.step.active{background:var(--soft);color:var(--brand);font-weight:700}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.span2{grid-column:span 2}.wizard-actions{display:flex;justify-content:space-between;margin-top:25px}.success{max-width:700px;margin:50px auto;text-align:center}.success-icon{width:70px;height:70px;border-radius:50%;background:#e9f8f1;color:var(--success);display:grid;place-items:center;font-size:34px;margin:auto}.link-box{display:flex;gap:8px;margin:25px 0}.link-box input{flex:1;background:#f8f9fc;border:1px solid var(--line);border-radius:9px;padding:12px}.detail-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px}.tabs button{border:0;background:transparent;padding:12px 16px;color:var(--muted);border-bottom:2px solid transparent}.tabs button.active{color:var(--brand);border-color:var(--brand);font-weight:700}.table{width:100%;border-collapse:collapse}.table th,.table td{text-align:left;padding:14px;border-bottom:1px solid var(--line);font-size:13px}.table th{color:var(--muted);font-weight:650}.bar-wrap{display:flex;align-items:end;gap:12px;height:180px;padding-top:20px}.bar{flex:1;background:var(--soft);border-radius:6px 6px 0 0;min-width:22px}.metric-grid{grid-template-columns:repeat(3,1fr)}.pricing{grid-template-columns:repeat(3,1fr);max-width:1050px;margin:auto}.price-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:25px}.price-card.featured{border:2px solid var(--brand);position:relative}.price-card .tag{position:absolute;top:14px;right:14px;background:var(--soft);color:var(--brand);font-size:10px;padding:5px 8px;border-radius:999px;font-weight:700}.price{font-size:35px;font-weight:800;margin:15px 0}.price small{font-size:13px;color:var(--muted);font-weight:500}.checklist{padding:0;list-style:none;color:#5e6270;line-height:2}.checklist li:before{content:'✓';color:var(--success);font-weight:800;margin-right:8px}.chat-demo{height:480px;border:1px solid var(--line);border-radius:15px;background:#fafbff;display:flex;flex-direction:column}.chat-head{padding:15px 18px;border-bottom:1px solid var(--line);background:#fff;border-radius:15px 15px 0 0;display:flex;align-items:center;gap:10px}.chat-body{padding:18px;flex:1;overflow:auto}.bubble{max-width:75%;padding:11px 14px;border-radius:13px;margin:9px 0;font-size:13px;line-height:1.45}.bot-b{background:#fff;border:1px solid var(--line)}.user-b{background:var(--brand);color:#fff;margin-left:auto}.chat-input{display:flex;gap:8px;padding:12px;background:#fff;border-top:1px solid var(--line);border-radius:0 0 15px 15px}.chat-input input{flex:1;border:1px solid var(--line);border-radius:9px;padding:11px}.notice{background:#fff8e6;border:1px solid #f0dfae;padding:12px 14px;border-radius:10px;font-size:12px;color:#775f1a}.search{width:260px;border:1px solid var(--line);border-radius:9px;padding:10px}.toast{position:fixed;right:24px;bottom:24px;background:#171a24;color:#fff;padding:12px 16px;border-radius:9px;box-shadow:var(--shadow);z-index:20}.mobile-menu{display:none}@media(max-width:900px){.login{grid-template-columns:1fr}.login-left{display:none}.layout{grid-template-columns:1fr}.sidebar{display:none;position:fixed;left:0;top:60px;bottom:0;width:250px;z-index:10;box-shadow:var(--shadow)}.sidebar.mobile-open{display:block}.mobile-menu{display:block}.stats,.bots,.pricing,.metric-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span2{grid-column:auto}.main{padding:18px}.search{width:160px}}
+
+/* BRIM v2 design layer */
+:root{
+  --bg:#f7f8ff;--panel:#fff;--text:#17152a;--muted:#6f7184;--line:#e7e4f3;
+  --brand:#6d4aff;--brand2:#4f32d8;--cyan:#19c8d8;--pink:#ff4fa3;
+  --soft:#f0edff;--success:#0f9d6a;--warning:#f59e0b;
+  --gradient:linear-gradient(135deg,#6d4aff 0%,#a54bff 48%,#19c8d8 100%);
+  --shadow:0 12px 35px rgba(71,45,160,.10);--radius:16px
+}
+body{background:radial-gradient(circle at 85% 0%,rgba(109,74,255,.09),transparent 28%),var(--bg)}
+.topbar{background:rgba(255,255,255,.94);backdrop-filter:blur(12px)}
+.logo span{background:var(--gradient);-webkit-background-clip:text;background-clip:text;color:transparent}
+.primary{background:var(--gradient);box-shadow:0 7px 18px rgba(109,74,255,.22)}
+.primary:hover{background:linear-gradient(135deg,#5b3be8,#8f3eea,#0db4c3)}
+.login-left{background:linear-gradient(135deg,#f0edff 0%,#fff 55%,#e9fcff 100%)}
+.login-left h1{background:var(--gradient);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pill{box-shadow:0 4px 14px rgba(109,74,255,.06)}
+.stat,.card,.bot-card,.price-card{box-shadow:var(--shadow)}
+.stat{position:relative;overflow:hidden}
+.stat:before{content:"";position:absolute;right:-28px;top:-28px;width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,rgba(109,74,255,.12),rgba(25,200,216,.10))}
+.bot-card{position:relative;overflow:hidden}
+.bot-card:before{content:"";position:absolute;left:0;top:0;width:100%;height:4px;background:var(--gradient)}
+.bot-icon{background:linear-gradient(135deg,#eee9ff,#e5fbff);color:var(--brand)}
+.step.active{background:linear-gradient(135deg,#eee9ff,#e6fbff);color:var(--brand)}
+.status{box-shadow:inset 0 0 0 1px rgba(15,157,106,.08)}
+.tabs button.active{color:var(--brand);border-color:var(--brand)}
+.bar{background:linear-gradient(180deg,#8c6dff,#19c8d8)}
+.price-card.featured{background:linear-gradient(180deg,#fff,#faf8ff)}
+.price-card.featured:after{content:"";position:absolute;inset:auto 20px 0;height:3px;background:var(--gradient);border-radius:4px}
+@media(max-width:1100px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .bots{grid-template-columns:repeat(2,1fr)}
+  .pricing{grid-template-columns:1fr}
+  .metric-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:700px){
+  .topbar{height:60px;padding:0 14px}
+  .layout{min-height:calc(100vh - 60px)}
+  .main{padding:16px}
+  .page-head,.detail-head{align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .page-head h1{font-size:23px}
+  .page-head .btn{width:100%}
+  .stats,.bots,.metric-grid,.form-grid{grid-template-columns:1fr!important}
+  .search{width:100%}
+  .steps{overflow-x:auto;padding-bottom:4px}
+  .step{min-width:145px}
+  .card{padding:16px}
+  .table{min-width:680px}
+  .card:has(.table){overflow-x:auto}
+  .tabs{overflow-x:auto}
+  .tabs button{white-space:nowrap;padding:10px 12px}
+  .chat-demo{height:calc(100vh - 170px);min-height:430px}
+  .bubble{max-width:88%}
+  .wizard{width:100%}
+  .success{padding:24px 16px;margin:25px auto}
+  .link-box{flex-direction:column}
+  .link-box .btn{width:100%}
+  .login-right{padding:18px}
+  .auth-card{padding:24px}
+}
+@media(max-width:420px){
+  .top-actions .btn{display:none}
+  .main{padding:12px}
+  .stat .value{font-size:24px}
+}
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const state={screen:'login',botTab:'overview',wizard:1,toast:''};
+const bots=[{id:1,name:'Prycoons Property Assistant',industry:'Real Estate',status:'Live',users:'1,284',chats:'842',desc:'Property discovery and customer assistance'},{id:2,name:'Demo Support Bot',industry:'Customer Support',status:'Draft',users:'—',chats:'—',desc:'FAQ and support assistant'}];
+function el(html){document.getElementById('app').innerHTML=html;}
+function toast(msg){state.toast=msg;render();setTimeout(()=>{state.toast='';render()},1600)}
+function login(){state.screen='dashboard';render()}
+function nav(s){state.screen=s;render()}
+function layout(content,active='dashboard'){el(`<div class="app"><header class="topbar"><div style="display:flex;align-items:center;gap:10px"><button class="btn secondary mobile-menu" onclick="document.querySelector('.sidebar')?.classList.toggle('mobile-open')">☰</button><div class="logo">BRIM<span>AI</span></div></div><div class="top-actions"><button class="btn secondary" onclick="nav('pricing')">Upgrade</button><div class="avatar">V</div></div></header><div class="layout"><aside class="sidebar"><div class="nav-title">Workspace</div><div class="nav">${['dashboard','bots','history','analytics','pricing'].map(x=>`<button class="${active===x?'active':''}" onclick="nav('${x}')">${({dashboard:'⌂  Dashboard',bots:'◈  My Bots',history:'◷  Chat History',analytics:'▥  Analytics',pricing:'◇  Pricing'})[x]}</button>`).join('')}</div><div class="nav-title">Account</div><div class="nav"><button onclick="toast('Settings screen ready for implementation')">⚙  Settings</button><button onclick="nav('login')">↪  Log out</button></div></aside><main class="main">${content}</main></div>${state.toast?`<div class="toast">${state.toast}</div>`:''}</div>`)}
+function loginScreen(){el(`<div class="login"><section class="login-left"><div class="logo">BRIM<span>AI</span></div><h1>Create, manage and share your AI chatbot.</h1><p>A simple workspace to build AI assistants from your business knowledge and share them with customers.</p><div class="feature-row"><span class="pill">Create bots</span><span class="pill">Upload knowledge</span><span class="pill">View conversations</span><span class="pill">Track analytics</span></div></section><section class="login-right"><div class="auth-card"><h2>Welcome back</h2><p class="muted">Sign in to continue to your workspace.</p><div class="field"><label>Email</label><input value="vaibhav@example.com"/></div><div class="field"><label>Password</label><input type="password" value="password"/></div><button class="btn primary full" onclick="login()">Log in</button><div style="text-align:center;margin:18px 0;color:#a0a3ae;font-size:12px">OR</div><button class="btn secondary full" onclick="login()">Continue with Google</button><p style="text-align:center;font-size:12px;margin-top:22px">Don't have an account? <a href="#" onclick="login();return false" style="color:var(--brand);font-weight:700">Sign up</a></p></div></section></div>`)}
+function dashboard(){layout(`<div class="page-head"><div><h1>Good morning, Vaibhav</h1><p class="muted">Manage your AI assistants from one place.</p></div><button class="btn primary" onclick="state.screen='create';state.wizard=1;render()">+ Create New Bot</button></div><div class="grid stats"><div class="stat"><div class="label">Total bots</div><div class="value">2</div><div class="delta">1 live</div></div><div class="stat"><div class="label">Conversations</div><div class="value">842</div><div class="delta">+18.4% this month</div></div><div class="stat"><div class="label">Active users</div><div class="value">1,284</div><div class="delta">+12.1% this month</div></div><div class="stat"><div class="label">Plan</div><div class="value" style="font-size:22px">Starter</div><div class="delta">18% usage</div></div></div><div class="page-head" style="margin-top:34px"><div><h2 style="margin:0;font-size:20px">Your bots</h2><p class="muted">Open a bot to manage its settings and conversations.</p></div><button class="btn secondary" onclick="nav('bots')">View all</button></div><div class="grid bots">${bots.map(botCard).join('')}</div>`,'dashboard')}
+function botCard(b){return `<div class="bot-card" onclick="openBot(${b.id})"><div class="bot-head"><div class="bot-icon">AI</div><div><h3>${b.name}</h3><p>${b.industry}</p></div><span class="status" style="margin-left:auto"><span class="dot"></span>${b.status}</span></div><p style="margin-top:18px">${b.desc}</p><div class="bot-meta"><span>◉ ${b.users} users</span><span>◌ ${b.chats} chats</span></div></div>`}
+function botsPage(){layout(`<div class="page-head"><div><h1>My Bots</h1><p class="muted">Create and manage your chatbot projects.</p></div><button class="btn primary" onclick="state.screen='create';state.wizard=1;render()">+ Create New Bot</button></div><div class="grid bots">${bots.map(botCard).join('')}</div>`,'bots')}
+function createPage(){const labels=['Basic information','Knowledge sources','Bot settings','Review'];layout(`<div class="wizard"><div class="page-head"><div><h1>Create a new bot</h1><p class="muted">Set up the basic information for your assistant.</p></div></div><div class="steps">${labels.map((x,i)=>`<div class="step ${state.wizard===i+1?'active':''}">${i+1}. ${x}</div>`).join('')}</div><div class="card">${createStep()}</div></div>`,'bots')}
+function createStep(){
+const industries=[
+"Real Estate","E-commerce","Healthcare","Education","Finance & Banking",
+"Travel & Hospitality","Legal Services","Technology & SaaS","Manufacturing",
+"Automotive","Marketing & Advertising","Logistics & Supply Chain",
+"Food & Restaurant","Fitness & Wellness","Professional Services","Other"
+];
+if(state.wizard===1)return `<div class="form-grid">
+<div class="field"><label>Bot name *</label><input value="Prycoons Property Assistant"/></div>
+<div class="field"><label>Industry *</label><select>${industries.map(i=>`<option ${i==='Real Estate'?'selected':''}>${i}</option>`).join('')}</select></div>
+<div class="field span2"><label>Short description</label><textarea rows="3">AI assistant for property discovery and customer enquiries.</textarea></div>
+<div class="field"><label>Business / Company name</label><input value="Prycoons"/></div>
+<div class="field"><label>Primary use case</label><select><option>Customer Support</option><option>Lead Generation</option><option>Product Discovery</option><option>Sales Assistance</option><option>Information & FAQ</option></select></div>
+</div>${actions()}`;
+
+if(state.wizard===2)return `<div class="notice">Add the sources your bot should use. The prototype only demonstrates the interface; processing can be connected later.</div>
+<div class="grid" style="grid-template-columns:repeat(2,1fr);margin-top:18px">
+<div class="card"><b>📄 Documents</b><p class="muted">PDF, DOCX and business files</p><button class="btn secondary" onclick="toast('Document picker opened')">+ Add files</button></div>
+<div class="card"><b>🌐 Website</b><p class="muted">Use your website as a knowledge source</p><input placeholder="https://example.com"/></div>
+<div class="card"><b>🖼 Images</b><p class="muted">Products, properties or business images</p><button class="btn secondary" onclick="toast('Image picker opened')">+ Add images</button></div>
+<div class="card"><b>✦ Instructions</b><p class="muted">Define how your bot should respond</p><textarea rows="3" placeholder="Use simple and friendly language..."></textarea></div>
+</div>${actions()}`;
+
+if(state.wizard===3)return `<div class="form-grid">
+<div class="field"><label>Bot personality</label><select><option>Friendly & professional</option><option>Professional</option><option>Casual</option><option>Concise</option></select></div>
+<div class="field"><label>Default language</label><select><option>English</option><option>Hindi</option><option>Gujarati</option><option>Tamil</option></select></div>
+<div class="field"><label>Welcome message</label><textarea rows="3">Hi! How can I help you today?</textarea></div>
+<div class="field"><label>Lead collection</label><select><option>When relevant</option><option>Always</option><option>Never</option></select></div>
+<div class="field"><label>Human handoff</label><select><option>Allow when needed</option><option>Always offer</option><option>Disabled</option></select></div>
+<div class="field"><label>Response style</label><select><option>Simple & clear</option><option>Detailed</option><option>Business professional</option></select></div>
+</div>${actions()}`;
+
+return `<h3>Review your bot</h3><p class="muted">Prycoons Property Assistant · Real Estate</p>
+<hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+<p><b>Knowledge:</b> Documents, website, images and instructions</p>
+<p><b>Industry:</b> Real Estate</p><p><b>Language:</b> English</p>
+<p><b>Behaviour:</b> Friendly & professional</p>
+<p><b>Lead capture:</b> When relevant</p>
+<div class="wizard-actions"><button class="btn secondary" onclick="state.wizard=3;render()">Back</button><button class="btn primary" onclick="state.screen='success';render()">Create Bot</button></div>`;
+}
+function actions(){return `<div class="wizard-actions"><button class="btn secondary" onclick="state.wizard>1?state.wizard--:nav('bots')">Back</button><button class="btn primary" onclick="state.wizard++;render()">Continue</button></div>`}
+function success(){el(`<div class="login" style="background:var(--bg)"><div class="success"><div class="success-icon">✓</div><h1>Bot created successfully</h1><p class="muted">Your chatbot project is ready. You can manage it from the bot workspace.</p><div class="card" style="text-align:left;margin-top:28px"><b>Shareable chatbot link</b><div class="link-box"><input id="share" readonly value="https://chat.brim.ai/prycoons-assistant"/><button class="btn primary" onclick="navigator.clipboard?.writeText(document.getElementById('share').value);toast('Link copied')">Copy</button></div><p class="muted" style="font-size:12px">This is a frontend prototype link. Deployment functionality can be connected later.</p></div><div style="margin-top:22px"><button class="btn primary" onclick="openBot(1)">Open Bot</button> <button class="btn secondary" onclick="nav('dashboard')">Go to Dashboard</button></div></div></div>`)}
+function openBot(id){state.screen='bot';state.botId=id;state.botTab='overview';render()}
+function botPage(){const b=bots.find(x=>x.id===state.botId)||bots[0];const tabs=['overview','chats','details','link','analytics'];layout(`<div class="detail-head"><div><h1>${b.name}</h1><p class="muted">${b.industry} · <span class="status"><span class="dot"></span>${b.status}</span></p></div><button class="btn primary" onclick="state.screen='chat';render()">Preview Chat</button></div><div class="tabs">${tabs.map(t=>`<button class="${state.botTab===t?'active':''}" onclick="state.botTab='${t}';render()">${({overview:'Overview',chats:'Chat History',details:'Bot Details',link:'Share & Deploy',analytics:'Analytics'})[t]}</button>`).join('')}</div>${botTabContent(b)}`,'bots')}
+function botTabContent(b){
+if(state.botTab==='overview')return `<div class="grid stats">
+<div class="stat"><div class="label">Conversations</div><div class="value">842</div><div class="delta">↑ 18.4% vs previous period</div></div>
+<div class="stat"><div class="label">Unique users</div><div class="value">1,284</div><div class="delta">↑ 12.1%</div></div>
+<div class="stat"><div class="label">Resolution rate</div><div class="value">78.6%</div><div class="delta">↑ 4.2%</div></div>
+<div class="stat"><div class="label">Lead captures</div><div class="value">126</div><div class="delta">↑ 9.6%</div></div>
+</div>
+<div class="grid" style="grid-template-columns:1.35fr .65fr;margin-top:18px">
+<div class="card"><div class="page-head"><div><h3 style="margin:0">Conversation activity</h3><p class="muted">Last 12 days</p></div><select class="search" style="width:140px"><option>12 days</option><option>30 days</option></select></div>
+<div class="bar-wrap">${[35,55,45,72,62,84,68,92,78,100,82,90].map(h=>`<div class="bar" style="height:${h}%"></div>`).join('')}</div></div>
+<div class="card"><h3>Bot health</h3>
+<p><span class="status">● Live</span></p><p><b>Knowledge sources</b><br><span class="muted">8 documents · 1 website · 12 images</span></p>
+<p><b>Last updated</b><br><span class="muted">Today, 10:42 AM</span></p>
+<button class="btn secondary full" onclick="state.botTab='details';render()">Manage bot</button></div>
+</div>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:18px">
+<div class="card"><h3>Conversation outcomes</h3><p>Resolved <b style="float:right">78.6%</b></p><p>Lead captured <b style="float:right">14.9%</b></p><p>Human handoff <b style="float:right">6.5%</b></p></div>
+<div class="card"><h3>Top topics</h3><p>Property availability <b style="float:right">31%</b></p><p>Pricing & budget <b style="float:right">24%</b></p><p>Site visits <b style="float:right">18%</b></p></div>
+</div>`;
+
+if(state.botTab==='chats')return `<div class="card"><div class="page-head"><div><h3 style="margin:0">Chat History</h3><p class="muted">Review and inspect individual conversations.</p></div><input class="search" placeholder="Search conversations"/></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"><button class="btn secondary">All</button><button class="btn secondary">Open</button><button class="btn secondary">Resolved</button><button class="btn secondary">Lead</button><button class="btn secondary">Handoff</button></div>
+<table class="table"><thead><tr><th>User</th><th>Last message</th><th>Messages</th><th>Status</th><th>Time</th></tr></thead><tbody>
+${[['Rahul','Looking for a 3 BHK in Gota','8','Resolved','10:42 AM'],['Anonymous','What is the starting price?','5','Resolved','09:58 AM'],['Priya','Can I schedule a site visit?','11','Lead','Yesterday'],['Anonymous','Tell me about this project','6','Open','Yesterday']].map(r=>`<tr>${r.map((x,i)=>`<td>${i===3?`<span class="status" style="${x==='Open'?'background:#fff4e7;color:#a76816':x==='Lead'?'background:#eef0ff;color:var(--brand)':''}"><span class="dot"></span>${x}</span>`:x}</td>`).join('')}</tr>`).join('')}
+</tbody></table></div>`;
+
+if(state.botTab==='details')return `<div class="grid" style="grid-template-columns:1fr 1fr">
+<div class="card"><h3>Basic information</h3><div class="field"><label>Bot name</label><input value="${b.name}"/></div>
+<div class="field"><label>Industry</label><select>${["Real Estate","E-commerce","Healthcare","Education","Finance & Banking","Technology & SaaS","Other"].map(i=>`<option ${i===b.industry?'selected':''}>${i}</option>`).join('')}</select></div>
+<div class="field"><label>Description</label><textarea rows="3">${b.desc}</textarea></div><button class="btn primary" onclick="toast('Changes saved')">Save changes</button></div>
+<div class="card"><h3>Knowledge sources</h3><p>📄 8 documents</p><p>🌐 1 website</p><p>🖼 12 images</p><p>✦ 3 custom instructions</p><button class="btn secondary" onclick="toast('Knowledge manager opened')">Manage sources</button>
+<h3 style="margin-top:28px">Conversation settings</h3><p class="muted">Friendly tone · English · Lead capture when relevant</p></div></div>`;
+
+if(state.botTab==='link')return `<div class="card" style="max-width:820px"><h3>Share & Deploy</h3><p class="muted">Give customers a public link or prepare the chatbot for website embedding.</p>
+<div class="link-box"><input id="share2" readonly value="https://chat.brim.ai/prycoons-assistant"/><button class="btn primary" onclick="navigator.clipboard?.writeText(document.getElementById('share2').value);toast('Link copied')">Copy link</button></div>
+<div class="grid" style="grid-template-columns:1fr 1fr"><div class="card"><b>Public link</b><p class="muted">Anyone with the link can access the chatbot.</p><button class="btn secondary" onclick="state.screen='chat';render()">Open chatbot</button></div>
+<div class="card"><b>Website embed</b><p class="muted">Embed the chatbot widget on your website.</p><button class="btn secondary" onclick="toast('Embed code panel opened')">Get embed code</button></div></div></div>`;
+
+return `<div class="page-head"><div><h2 style="margin:0">Bot Reporting</h2><p class="muted">Performance, engagement, outcomes and content insights.</p></div><div style="display:flex;gap:8px"><select class="search"><option>Last 30 days</option><option>Last 7 days</option><option>Last 90 days</option></select><button class="btn secondary" onclick="toast('Report exported')">Export report</button></div></div>
+<div class="grid metric-grid">
+<div class="stat"><div class="label">Total sessions</div><div class="value">1,284</div><div class="delta">↑ 12.1%</div></div>
+<div class="stat"><div class="label">Resolution rate</div><div class="value">78.6%</div><div class="delta">↑ 4.2%</div></div>
+<div class="stat"><div class="label">Human handoff</div><div class="value">6.5%</div></div>
+<div class="stat"><div class="label">Lead rate</div><div class="value">14.9%</div><div class="delta">↑ 9.6%</div></div>
+<div class="stat"><div class="label">Avg. messages/session</div><div class="value">6.8</div></div>
+<div class="stat"><div class="label">Avg. response time</div><div class="value">1.4s</div></div>
+</div>
+<div class="grid" style="grid-template-columns:1.4fr .6fr;margin-top:18px">
+<div class="card"><h3>Conversation volume</h3><p class="muted">Conversations by day</p><div class="bar-wrap">${[28,44,36,50,48,65,56,72,62,86,74,94].map(h=>`<div class="bar" style="height:${h}%"></div>`).join('')}</div></div>
+<div class="card"><h3>Outcomes</h3><p>Resolved <b style="float:right">78.6%</b></p><p>Lead <b style="float:right">14.9%</b></p><p>Handoff <b style="float:right">6.5%</b></p></div>
+</div>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:18px">
+<div class="card"><h3>Top conversation topics</h3><table class="table"><tbody><tr><td>Property availability</td><td>31%</td></tr><tr><td>Pricing & budget</td><td>24%</td></tr><tr><td>Site visits</td><td>18%</td></tr><tr><td>Location questions</td><td>12%</td></tr></tbody></table></div>
+<div class="card"><h3>Knowledge performance</h3><table class="table"><tbody><tr><td>Project documents</td><td>92% resolution</td></tr><tr><td>Website content</td><td>86% resolution</td></tr><tr><td>Property images</td><td>74% resolution</td></tr></tbody></table></div>
+</div>`;
+}
+function history(){layout(`<div class="page-head"><div><h1>Chat History</h1><p class="muted">All conversations across your bots.</p></div><input class="search" placeholder="Search chats"/></div><div class="card"><table class="table"><thead><tr><th>Bot</th><th>User</th><th>Preview</th><th>Status</th><th>Last active</th></tr></thead><tbody>${[['Prycoons Property Assistant','Rahul','Looking for a 3 BHK...','Resolved','10:42 AM'],['Prycoons Property Assistant','Priya','Can I schedule a site visit?','Lead','Yesterday'],['Demo Support Bot','Anonymous','How do I reset my password?','Resolved','Sep 22']].map(r=>`<tr>${r.map((x,i)=>`<td>${i===3?`<span class="status" style="${x==='Lead'?'background:#eef0ff;color:var(--brand)':''}">${x}</span>`:x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`,'history')}
+function analytics(){layout(`<div class="page-head"><div><h1>Reporting & Analytics</h1><p class="muted">A workspace-level view of chatbot performance and business outcomes.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><select class="search"><option>Last 30 days</option><option>Last 7 days</option><option>Last 90 days</option></select><button class="btn secondary" onclick="toast('Workspace report exported')">Export report</button></div></div>
+<div class="grid metric-grid">
+<div class="stat"><div class="label">Total conversations</div><div class="value">842</div><div class="delta">↑ 18.4%</div></div>
+<div class="stat"><div class="label">Unique users</div><div class="value">1,284</div><div class="delta">↑ 12.1%</div></div>
+<div class="stat"><div class="label">Resolution rate</div><div class="value">78.6%</div><div class="delta">↑ 4.2%</div></div>
+<div class="stat"><div class="label">Human handoff</div><div class="value">6.5%</div></div>
+<div class="stat"><div class="label">Lead captures</div><div class="value">126</div><div class="delta">↑ 9.6%</div></div>
+<div class="stat"><div class="label">Avg. messages/session</div><div class="value">6.8</div></div>
+</div>
+<div class="grid" style="grid-template-columns:1.35fr .65fr;margin-top:18px">
+<div class="card"><h3>Conversation volume</h3><p class="muted">Daily conversation activity</p><div class="bar-wrap">${[20,35,42,32,58,54,72,66,82,70,94,88].map(h=>`<div class="bar" style="height:${h}%"></div>`).join('')}</div></div>
+<div class="card"><h3>Bot performance</h3><p>Prycoons Assistant <b style="float:right">842</b></p><p>Demo Support Bot <b style="float:right">—</b></p><hr style="border:0;border-top:1px solid var(--line)"><p class="muted">Live bots: 1 · Draft bots: 1</p></div>
+</div>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:18px">
+<div class="card"><h3>Conversation outcomes</h3><p>Resolved <b style="float:right">78.6%</b></p><p>Lead captured <b style="float:right">14.9%</b></p><p>Human handoff <b style="float:right">6.5%</b></p></div>
+<div class="card"><h3>Top topics</h3><p>Property availability <b style="float:right">31%</b></p><p>Pricing & budget <b style="float:right">24%</b></p><p>Site visits <b style="float:right">18%</b></p></div>
+</div>`, 'analytics')}
+function pricing(){layout(`<div style="text-align:center;margin-bottom:30px"><h1>Simple pricing</h1><p class="muted">Start small and upgrade as your chatbot usage grows.</p></div><div class="grid pricing"><div class="price-card"><h3>Free</h3><p class="muted">For testing and personal projects</p><div class="price">₹0 <small>/ month</small></div><button class="btn secondary full">Current plan</button><ul class="checklist"><li>1 chatbot</li><li>100 conversations</li><li>Basic analytics</li><li>Shareable link</li></ul></div><div class="price-card featured"><span class="tag">POPULAR</span><h3>Pro</h3><p class="muted">For growing businesses</p><div class="price">₹1,999 <small>/ month</small></div><button class="btn primary full" onclick="toast('Upgrade flow selected')">Upgrade</button><ul class="checklist"><li>10 chatbots</li><li>5,000 conversations</li><li>Advanced analytics</li><li>Custom instructions</li><li>Website embed</li></ul></div><div class="price-card"><h3>Business</h3><p class="muted">For teams and larger usage</p><div class="price">Custom</div><button class="btn secondary full" onclick="toast('Contact sales flow selected')">Contact sales</button><ul class="checklist"><li>Unlimited projects</li><li>Higher usage limits</li><li>Team access</li><li>Priority support</li><li>Custom deployment</li></ul></div></div>`,'pricing')}
+function chatPreview(){el(`<div class="app"><header class="topbar"><div class="logo">BRIM<span>AI</span></div><button class="btn secondary" onclick="openBot(1)">← Back to Bot</button></header><main class="main" style="max-width:850px"><div class="page-head"><div><h1>Chatbot Preview</h1><p class="muted">This is how an end user could experience the chatbot.</p></div></div><div class="chat-demo"><div class="chat-head"><div class="bot-icon" style="width:34px;height:34px">AI</div><div><b>Prycoons Assistant</b><div style="font-size:11px;color:var(--success)">● Online</div></div></div><div class="chat-body"><div class="bubble bot-b">Hi! 👋 I’m the Prycoons Assistant. How can I help you today?</div><div class="bubble user-b">I am looking for a 3 BHK in Gota.</div><div class="bubble bot-b">Sure! I can help with that. What is your approximate budget?</div><div class="bubble user-b">Around ₹80 lakh.</div><div class="bubble bot-b">Great. I can show you properties that match your budget and location. Would you like to see the available options?</div></div><div class="chat-input"><input placeholder="Type your message..."/><button class="btn primary" onclick="toast('Message sent (prototype)')">Send</button></div></div></main></div>`)}
+function render(){if(!state.screen)state.screen='login';if(state.screen==='login')return loginScreen();if(state.screen==='dashboard')return dashboard();if(state.screen==='bots')return botsPage();if(state.screen==='create')return createPage();if(state.screen==='success')return success();if(state.screen==='bot')return botPage();if(state.screen==='history')return history();if(state.screen==='analytics')return analytics();if(state.screen==='pricing')return pricing();if(state.screen==='chat')return chatPreview();}
+render();
+</script></body></html>
