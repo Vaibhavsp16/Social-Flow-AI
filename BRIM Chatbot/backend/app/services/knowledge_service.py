@@ -80,6 +80,36 @@ class KnowledgeService:
         )
 
     @staticmethod
+    def _finalize_source(
+        db: Session,
+        source: KnowledgeSource,
+        extracted_text: str,
+        chunks: List[str],
+        metadata: dict,
+    ) -> None:
+        """
+        Persist extraction results and set an honest processing status.
+
+        A source is only COMPLETED when it actually produced chunks. Otherwise it is marked
+        FAILED with an actionable error, so the UI can show the real reason instead of
+        silently reporting success over an empty knowledge base.
+        """
+        source.extracted_text = extracted_text
+        source.chunks_count = len(chunks)
+        source.metadata_json = json.dumps(metadata)
+        if chunks:
+            source.processing_status = ProcessingStatus.COMPLETED.value
+            source.error_message = None
+        else:
+            source.processing_status = ProcessingStatus.FAILED.value
+            source.error_message = (
+                "No text could be extracted from this source, so no knowledge chunks were "
+                "created. Check that the content contains selectable text (scanned images "
+                "require OCR) and try again."
+            )
+        db.commit()
+
+    @staticmethod
     def _generate_and_save_chunks(
         db: Session,
         bot_id: int,
@@ -95,7 +125,7 @@ class KnowledgeService:
         for idx, chunk_text in enumerate(chunks):
             if not chunk_text or not chunk_text.strip():
                 continue
-            embedding = EmbeddingService.get_embedding(chunk_text)
+            embedding, provider = EmbeddingService.get_embedding_with_provider(chunk_text)
             page_info = None
             if source.source_type == KnowledgeSourceType.DOCUMENT.value and metadata.get("page_count"):
                 page_info = f"Section {idx + 1}"
@@ -113,6 +143,8 @@ class KnowledgeService:
                 page_number=page_info,
                 metadata_json=json.dumps(metadata),
                 embedding_json=json.dumps(embedding),
+                embedding_vector=embedding,
+                embedding_provider=provider,
             )
             db.add(chunk_record)
         db.commit()
@@ -199,12 +231,7 @@ class KnowledgeService:
 
             chunks = DocumentProcessor.chunk_text(extracted_text)
 
-            source.extracted_text = extracted_text
-            source.chunks_count = len(chunks)
-            source.metadata_json = json.dumps(metadata)
-            source.processing_status = ProcessingStatus.COMPLETED.value
-            source.error_message = None
-            db.commit()
+            KnowledgeService._finalize_source(db, source, extracted_text, chunks, metadata)
 
             # Generate and persist chunks + vector embeddings
             KnowledgeService._generate_and_save_chunks(db, bot_id, source, chunks, metadata)
@@ -250,12 +277,7 @@ class KnowledgeService:
             if not website_in.name and metadata.get("page_title"):
                 source.name = metadata["page_title"]
 
-            source.extracted_text = extracted_text
-            source.chunks_count = len(chunks)
-            source.metadata_json = json.dumps(metadata)
-            source.processing_status = ProcessingStatus.COMPLETED.value
-            source.error_message = None
-            db.commit()
+            KnowledgeService._finalize_source(db, source, extracted_text, chunks, metadata)
 
             # Generate and persist chunks + vector embeddings
             KnowledgeService._generate_and_save_chunks(db, bot_id, source, chunks, metadata)
@@ -361,15 +383,13 @@ class KnowledgeService:
             bot_id=bot_id,
             source_type=KnowledgeSourceType.INSTRUCTION.value,
             name=instr_in.name,
-            extracted_text=full_instruction_text,
-            chunks_count=len(chunks),
-            metadata_json=json.dumps(metadata),
-            processing_status=ProcessingStatus.COMPLETED.value,
+            processing_status=ProcessingStatus.PROCESSING.value,
         )
         db.add(source)
         db.commit()
         db.refresh(source)
 
+        KnowledgeService._finalize_source(db, source, full_instruction_text, chunks, metadata)
         KnowledgeService._generate_and_save_chunks(db, bot_id, source, chunks, metadata)
         db.refresh(source)
         return source
@@ -424,3 +444,71 @@ class KnowledgeService:
         db.delete(source)
         db.commit()
         return {"message": "Knowledge source deleted successfully", "id": source_id}
+
+    SAMPLE_DOCS = {
+        "real_estate": {
+            "key": "real_estate",
+            "name": "Prycoons Real Estate Official Guide",
+            "filename": "Prycoons_Real_Estate_Guide.txt",
+            "industry": "Real Estate",
+            "description": "Comprehensive pricing, amenities, and floor plans for Sunset Palms & The Heights in Ambli.",
+        },
+        "healthcare": {
+            "key": "healthcare",
+            "name": "Apex Healthcare Wellness Clinic Guide",
+            "filename": "Apex_Healthcare_Clinic_Guide.txt",
+            "industry": "Healthcare",
+            "description": "Doctors, specialist timings, consultation charges, emergency line, and accepted insurances.",
+        },
+        "saas": {
+            "key": "saas",
+            "name": "CloudScale SaaS Platform Documentation",
+            "filename": "CloudScale_SaaS_Platform_Docs.txt",
+            "industry": "Technology & SaaS",
+            "description": "Pricing tiers ($49, $199, Enterprise), API rate limits, SSO, SOC 2 compliance, and SLA.",
+        },
+    }
+
+    @staticmethod
+    def get_sample_documents() -> list:
+        return list(KnowledgeService.SAMPLE_DOCS.values())
+
+    @staticmethod
+    def seed_sample_document(db: Session, bot_id: int, sample_key: str, user_id: int) -> KnowledgeSource:
+        bot = KnowledgeService.verify_bot_ownership(db, bot_id, user_id)
+        sample = KnowledgeService.SAMPLE_DOCS.get(sample_key)
+        if not sample:
+            sample = KnowledgeService.SAMPLE_DOCS["real_estate"]
+
+        doc_path = Path("demo_documents") / sample["filename"]
+        if not doc_path.exists():
+            doc_path = Path(__file__).resolve().parent.parent.parent / "demo_documents" / sample["filename"]
+
+        content = doc_path.read_text(encoding="utf-8") if doc_path.exists() else ""
+        if not content:
+            raise HTTPException(status_code=500, detail="Demo document template not found on server.")
+
+        source = KnowledgeSource(
+            bot_id=bot_id,
+            source_type=KnowledgeSourceType.DOCUMENT.value,
+            name=sample["name"],
+            original_filename=sample["filename"],
+            file_size=len(content.encode("utf-8")),
+            processing_status=ProcessingStatus.PROCESSING.value,
+        )
+        db.add(source)
+        db.commit()
+        db.refresh(source)
+
+        chunks = DocumentProcessor.chunk_text(content)
+        metadata = {
+            "is_demo_sample": True,
+            "industry": sample["industry"],
+            "character_count": len(content),
+            "chunk_count": len(chunks),
+        }
+
+        KnowledgeService._finalize_source(db, source, content, chunks, metadata)
+        KnowledgeService._generate_and_save_chunks(db, bot_id, source, chunks, metadata)
+        db.refresh(source)
+        return source

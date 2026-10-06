@@ -40,6 +40,7 @@ def bot_chat_authenticated(
         bot_id=bot.id,
         query=request.message,
         top_k=request.top_k or 4,
+        threshold=request.threshold if request.threshold is not None else 0.02,
     )
 
     # 2. Generate grounded answer
@@ -51,14 +52,17 @@ def bot_chat_authenticated(
     )
 
     # 3. Format source citations
-    citations = RetrievalService.format_citations(retrieved_chunks)
+    if "I do not have" in reply or not retrieved_chunks:
+        citations = []
+    else:
+        citations = RetrievalService.format_citations(retrieved_chunks)
 
     return ChatQueryResponse(
         reply=reply,
         bot_id=bot.id,
         bot_name=bot.name,
         sources=citations,
-        confidence=round(retrieved_chunks[0][1], 4) if retrieved_chunks else 0.0,
+        confidence=round(retrieved_chunks[0][1], 4) if (retrieved_chunks and citations) else 0.0,
     )
 
 @router.post("/public/bots/{slug}/chat", response_model=ChatQueryResponse)
@@ -83,6 +87,7 @@ def bot_chat_public(
         bot_id=bot.id,
         query=request.message,
         top_k=request.top_k or 4,
+        threshold=request.threshold if request.threshold is not None else 0.02,
     )
 
     # 2. Generate grounded answer
@@ -94,12 +99,15 @@ def bot_chat_public(
     )
 
     # 3. Format source citations
-    citations = RetrievalService.format_citations(retrieved_chunks)
+    if "I do not have" in reply or not retrieved_chunks:
+        citations = []
+    else:
+        citations = RetrievalService.format_citations(retrieved_chunks)
 
     return ChatQueryResponse(
         reply=reply,
         bot_id=bot.id,
         bot_name=bot.name,
         sources=citations,
-        confidence=round(retrieved_chunks[0][1], 4) if retrieved_chunks else 0.0,
+        confidence=round(retrieved_chunks[0][1], 4) if (retrieved_chunks and citations) else 0.0,
     )

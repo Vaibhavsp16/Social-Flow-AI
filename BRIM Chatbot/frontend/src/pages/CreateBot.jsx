@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PREDEFINED_INDUSTRIES } from '../constants/industries';
 import { projectService } from '../services/projectService';
 import { botService } from '../services/botService';
+import { knowledgeService } from '../services/knowledgeService';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -28,18 +29,20 @@ export const CreateBot = () => {
     primaryUseCase: 'Customer Support',
 
     // Step 2: Knowledge Sources
-    websiteUrl: 'https://prycoons.example.com',
-    instructions: 'Be polite, helpful, and answer property-related questions accurately.',
+    sampleDocKey: 'real_estate', // 'real_estate' | 'healthcare' | 'saas' | 'none'
+    websiteUrl: '',
+    instructions: 'Be polite, helpful, and answer property-related questions accurately based on the provided documents.',
 
     // Step 3: Bot Settings
     personality: 'Friendly & professional',
     language: 'English',
-    welcomeMessage: 'Hi! How can I help you today?',
+    welcomeMessage: 'Hi! How can I help you today with properties and real estate?',
     leadCollection: 'When relevant',
     humanHandoff: 'Allow when needed',
     responseStyle: 'Simple & clear',
   });
 
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [errors, setErrors] = useState({});
 
   const validateStep1 = () => {
@@ -83,9 +86,63 @@ export const CreateBot = () => {
         status: 'Live',
       });
 
+      // 3. Attach knowledge sources selected in Step 2
+      let attachedKnowledgeCount = 0;
+
+      // 3a. Seed sample document if chosen
+      if (formData.sampleDocKey && formData.sampleDocKey !== 'none') {
+        try {
+          await knowledgeService.seedSampleDocument(bot.id, formData.sampleDocKey);
+          attachedKnowledgeCount++;
+        } catch (seedErr) {
+          console.warn('Could not seed sample doc:', seedErr);
+        }
+      }
+
+      // 3b. Upload custom file if provided
+      if (uploadedFile) {
+        try {
+          await knowledgeService.uploadFile(bot.id, uploadedFile);
+          attachedKnowledgeCount++;
+        } catch (uploadErr) {
+          console.warn('Could not upload file:', uploadErr);
+        }
+      }
+
+      // 3c. Add website if provided
+      if (formData.websiteUrl.trim()) {
+        try {
+          await knowledgeService.addWebsite(bot.id, {
+            url: formData.websiteUrl.trim(),
+            name: `${formData.name} Website`,
+          });
+          attachedKnowledgeCount++;
+        } catch (webErr) {
+          console.warn('Could not index website:', webErr);
+        }
+      }
+
+      // 3d. Add custom instructions if provided
+      if (formData.instructions.trim()) {
+        try {
+          await knowledgeService.addInstruction(bot.id, {
+            name: 'Core System Guidelines',
+            instructions: formData.instructions.trim(),
+            tone: formData.personality,
+          });
+          attachedKnowledgeCount++;
+        } catch (instrErr) {
+          console.warn('Could not save instructions:', instrErr);
+        }
+      }
+
       setCreatedBot(bot);
       setStep(5); // Success step
-      showToast('Bot created successfully in PostgreSQL database!');
+      showToast(
+        attachedKnowledgeCount > 0
+          ? `Bot created with ${attachedKnowledgeCount} knowledge source(s) indexed!`
+          : 'Bot created successfully in PostgreSQL database!'
+      );
     } catch (err) {
       setApiError(err.userMessage || 'Failed to create bot. Please check your inputs.');
     } finally {
@@ -230,55 +287,104 @@ export const CreateBot = () => {
         {/* Step 2: Knowledge Sources */}
         {step === 2 && (
           <div>
-            <div className="notice">
-              Add the knowledge sources your bot should use. In this foundation phase, your configuration is saved and ready for the RAG AI layer.
+            <div className="notice" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px 16px', borderRadius: '8px', marginBottom: '18px' }}>
+              💡 <b>Knowledge Base Setup:</b> Choose a pre-packaged industry knowledge guide for immediate demo testing, or upload your own business document.
             </div>
 
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginTop: '20px' }}>
-              <div className="card">
-                <b>📄 Documents</b>
-                <p className="muted" style={{ fontSize: '13px', margin: '6px 0 14px' }}>
-                  PDF, DOCX and business files
+            {/* Quick Demo Document Picker */}
+            <div style={{ marginBottom: '20px', padding: '16px', background: '#fafbff', border: '1px solid var(--line)', borderRadius: '10px' }}>
+              <b style={{ fontSize: '14.5px', color: 'var(--brand)', display: 'block', marginBottom: '4px' }}>
+                ⚡ Pre-Packaged Demo Knowledge Guides (Recommended for Demo)
+              </b>
+              <p className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
+                Select a sample document to automatically seed into the bot's RAG knowledge base upon creation.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+                {[
+                  { key: 'real_estate', title: '🏢 Real Estate Guide', desc: 'Prycoons Projects, Sunset Palms, 3/4 BHK' },
+                  { key: 'healthcare', title: '🏥 Healthcare Guide', desc: 'Apex Medical, Dr. Rao, Cardiology, OPD' },
+                  { key: 'saas', title: '☁️ SaaS Platform Docs', desc: 'CloudScale AI, Starter $49, Pro $199' },
+                  { key: 'none', title: '🚫 None / Empty', desc: 'Start with blank knowledge base' },
+                ].map((item) => (
+                  <div
+                    key={item.key}
+                    onClick={() => setFormData({ ...formData, sampleDocKey: item.key })}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: formData.sampleDocKey === item.key ? '2px solid var(--brand)' : '1px solid var(--line)',
+                      background: formData.sampleDocKey === item.key ? '#eff6ff' : '#fff',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <b style={{ fontSize: '13.5px', display: 'block', color: formData.sampleDocKey === item.key ? 'var(--brand)' : '#111827' }}>
+                      {item.title}
+                    </b>
+                    <span className="muted" style={{ fontSize: '12px' }}>{item.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+              <div className="card" style={{ padding: '16px', border: '1px solid var(--line)', borderRadius: '10px' }}>
+                <b>📄 Upload Custom Document</b>
+                <p className="muted" style={{ fontSize: '12.5px', margin: '4px 0 12px' }}>
+                  Supported: .PDF, .DOCX, .TXT, .PNG, .JPG (Max 25MB)
                 </p>
-                <Button variant="secondary" onClick={() => showToast('Document upload manager will be active in Day 3')}>
-                  + Add files
+                <input
+                  type="file"
+                  id="bot-create-file-input"
+                  accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      setUploadedFile(e.target.files[0]);
+                      showToast(`Selected file: ${e.target.files[0].name}`);
+                    }
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  onClick={() => document.getElementById('bot-create-file-input')?.click()}
+                >
+                  {uploadedFile ? `📎 ${uploadedFile.name}` : '+ Choose File'}
                 </Button>
+                {uploadedFile && (
+                  <button
+                    onClick={() => setUploadedFile(null)}
+                    style={{ marginLeft: '8px', background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }}
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
 
-              <div className="card">
-                <b>🌐 Website</b>
-                <p className="muted" style={{ fontSize: '13px', margin: '6px 0 10px' }}>
-                  Use your website as knowledge source
+              <div className="card" style={{ padding: '16px', border: '1px solid var(--line)', borderRadius: '10px' }}>
+                <b>🌐 Website URL</b>
+                <p className="muted" style={{ fontSize: '12.5px', margin: '4px 0 10px' }}>
+                  Crawl website for answers (Optional)
                 </p>
                 <input
                   placeholder="https://example.com"
                   value={formData.websiteUrl}
                   onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--line)', borderRadius: '8px' }}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--line)', borderRadius: '8px', fontSize: '13px' }}
                 />
               </div>
 
-              <div className="card">
-                <b>🖼 Images</b>
-                <p className="muted" style={{ fontSize: '13px', margin: '6px 0 14px' }}>
-                  Products, properties or catalogs
-                </p>
-                <Button variant="secondary" onClick={() => showToast('Image processor will be active in Day 3')}>
-                  + Add images
-                </Button>
-              </div>
-
-              <div className="card">
-                <b>✦ Instructions</b>
-                <p className="muted" style={{ fontSize: '13px', margin: '6px 0 8px' }}>
-                  Define custom prompt rules
+              <div className="card" style={{ gridColumn: 'span 2', padding: '16px', border: '1px solid var(--line)', borderRadius: '10px' }}>
+                <b>✦ Custom Prompt Guidelines & Business Rules</b>
+                <p className="muted" style={{ fontSize: '12.5px', margin: '4px 0 8px' }}>
+                  Define specific rules, tone, and answering constraints for this bot.
                 </p>
                 <textarea
-                  rows="2"
+                  rows="3"
                   value={formData.instructions}
                   onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
-                  placeholder="Custom guidelines..."
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: '8px' }}
+                  placeholder="Be polite, helpful, and answer questions accurately based on the provided documents..."
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: '8px', fontSize: '13px', lineHeight: '1.5' }}
                 />
               </div>
             </div>

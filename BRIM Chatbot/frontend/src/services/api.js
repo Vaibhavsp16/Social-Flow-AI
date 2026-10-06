@@ -7,7 +7,9 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  // Uploads and website ingestion run extraction, chunking and embedding server-side,
+  // which can legitimately take longer than a plain JSON request.
+  timeout: 60000,
 });
 
 // Request interceptor to attach JWT token

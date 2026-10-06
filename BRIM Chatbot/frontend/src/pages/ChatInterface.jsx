@@ -271,15 +271,35 @@ export const ChatInterface = () => {
     }
   }, [bot, startNewConversation]);
 
+  // Initialise exactly once per bot. Depending on `bot` here previously re-ran this effect
+  // when the bot finished loading, silently creating a second empty conversation on every open.
+  const initialisedBotRef = useRef(null);
+
   useEffect(() => {
-    if (!botId) return;
+    if (!botId || initialisedBotRef.current === botId) return;
+    initialisedBotRef.current = botId;
     const existingId = searchParams.get('convo');
     if (existingId) {
       loadConversation(existingId);
     } else {
       startNewConversation();
     }
-  }, [botId, bot]); // re-run when bot loads
+  }, [botId, bot, searchParams, loadConversation, startNewConversation]);
+
+  // Once the bot details arrive, refresh the placeholder welcome bubble if the user has not
+  // sent anything yet, so the real welcome message shows without opening another conversation.
+  useEffect(() => {
+    if (!bot) return;
+    setMessages((prev) => {
+      if (prev.length !== 1 || prev[0].id !== 'welcome') return prev;
+      return [
+        {
+          ...prev[0],
+          text: bot.welcome_message || `Hi there! 👋 I'm ${bot.name || 'your AI assistant'}. How can I help you today?`,
+        },
+      ];
+    });
+  }, [bot]);
 
   // ── Load conversation history list ─────────────────────────────────────────
   const loadHistory = async () => {

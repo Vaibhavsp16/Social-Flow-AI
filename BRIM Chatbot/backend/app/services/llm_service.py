@@ -124,6 +124,12 @@ class LLMService:
         """
         Execute LLM completion with retries, or perform grounded local synthesis if API key is not configured.
         """
+        # Greetings are answered before the knowledge check, so saying "hi" to a bot that has
+        # no (or unmatched) knowledge never produces a refusal.
+        greeting_reply = cls._greeting_reply(bot, user_query, retrieved_chunks)
+        if greeting_reply:
+            return greeting_reply
+
         # If no knowledge chunks were found or similarity is insufficient, decline politely
         if not retrieved_chunks:
             return GROUNDED_REFUSAL_MESSAGE
@@ -142,7 +148,7 @@ class LLMService:
 
             messages.append({"role": "user", "content": user_query})
 
-            # Retry loop with exponential backoff
+            # Try LLM completion
             for attempt in range(1, max_retries + 1):
                 try:
                     response = client.chat.completions.create(
@@ -155,14 +161,48 @@ class LLMService:
                     if reply:
                         return reply
                 except Exception as e:
+                    err_str = str(e).lower()
+                    if "insufficient_quota" in err_str or "credit_balance_exhausted" in err_str or "quota" in err_str:
+                        logger.info("OpenAI quota exhausted. Seamlessly utilizing grounded synthesis engine.")
+                        break
                     logger.warning(f"LLM generation attempt {attempt}/{max_retries} failed: {e}")
                     if attempt < max_retries:
-                        time.sleep(2 ** attempt * 0.5)
+                        time.sleep(1.0)
                     else:
-                        logger.error(f"All LLM retries failed. Falling back to grounded context synthesis.")
+                        logger.info("Falling back to grounded context synthesis.")
 
         # Grounded Local Synthesizer Fallback (Deterministic, hallucination-free, zero-cost)
         return cls._local_grounded_synthesis(bot, retrieved_chunks, user_query)
+
+    GREETING_WORDS = {
+        "hi", "hii", "hello", "hey", "yo", "greetings", "morning", "afternoon", "evening",
+        "thanks", "thank", "bye", "goodbye", "help",
+    }
+
+    @classmethod
+    def _greeting_reply(
+        cls,
+        bot: Bot,
+        user_query: str,
+        retrieved_chunks: Optional[List[Tuple[KnowledgeChunk, float]]] = None,
+    ) -> Optional[str]:
+        """
+        Warm, bot-specific reply for a short greeting or thanks. Returns None when the message
+        is a real question, so it is never mistaken for one.
+        """
+        import re
+
+        words = set(re.findall(r"[a-z0-9]+", user_query.lower()))
+        if not words or len(words) > 4 or not (words & cls.GREETING_WORDS):
+            return None
+
+        welcome = bot.welcome_message or f"Hello! 👋 I'm {bot.name}. How can I assist you today?"
+        if retrieved_chunks:
+            return (
+                f"{welcome}\n\nI have information loaded from our knowledge base "
+                f"({retrieved_chunks[0][0].source_name}). Feel free to ask any questions!"
+            )
+        return welcome
 
     @classmethod
     def _local_grounded_synthesis(
@@ -173,34 +213,86 @@ class LLMService:
     ) -> str:
         """
         Deterministic local fallback synthesis when external LLM APIs are unreachable or not configured.
-        Extracts relevant facts strictly from the top matching knowledge chunks without hallucination.
+        Extracts relevant facts strictly from the top matching knowledge chunks with 5th-grade clarity.
         """
+        import re
+
+        clean_query = re.sub(r'[^a-zA-Z0-9\s]', ' ', user_query.lower()).strip()
+        query_words = set(w for w in clean_query.split() if len(w) > 1)
+
         if not retrieved_chunks:
             return GROUNDED_REFUSAL_MESSAGE
 
         top_chunk, top_score = retrieved_chunks[0]
+        chunk_text = top_chunk.content.strip()
+        chunk_text_lower = chunk_text.lower()
 
-        # Check if query terms share meaningful semantic overlap with top chunk
-        query_words = set(w.lower() for w in user_query.split() if len(w) > 3)
-        chunk_text_lower = top_chunk.content.lower()
+        # Stop words to filter out noise
+        stop_words = {
+            "what", "which", "where", "when", "how", "who", "why", "the", "and", "for",
+            "with", "about", "your", "this", "that", "tell", "have", "does", "give", "info",
+            "information", "details", "explain", "describe", "please", "can", "you", "are",
+            "his", "her", "their", "our", "him", "she", "any", "some", "all"
+        }
+        content_query_words = {w for w in query_words if len(w) > 2 and w not in stop_words}
 
-        # If there is very weak keyword overlap despite vector distance, trigger safety refusal
-        has_overlap = any(word in chunk_text_lower for word in query_words)
-        if not has_overlap and top_score < 0.35:
+        # Check keyword presence across all retrieved chunks
+        all_chunks_text = " ".join([c.content.lower() for c, _ in retrieved_chunks])
+        has_overlap = any(w in all_chunks_text for w in content_query_words) if content_query_words else True
+
+        # Broad "what do you know about this business" questions carry no specific term to match
+        # on, so they are answered from the retrieved content instead of being refused.
+        overview_terms = {
+            "information", "info", "about", "business", "company", "service", "services",
+            "offer", "offers", "know", "knowledge", "overview", "summary", "details",
+            "available", "help", "assist", "product", "products",
+        }
+        is_overview_query = bool(query_words & overview_terms)
+
+        # Safety check: if the user asked something completely off-topic with no overlap,
+        # refuse with the single canonical refusal message instead of inventing an answer.
+        if content_query_words and not has_overlap and not is_overview_query:
             return GROUNDED_REFUSAL_MESSAGE
 
-        # Formulate grounded direct response using retrieved chunk content
-        cleaned_content = top_chunk.content.strip()
-        lines = [line.strip() for line in cleaned_content.split("\n") if line.strip()]
-        
-        # Present direct grounded information
-        source_label = f"Based on {top_chunk.source_name}"
-        if top_chunk.page_number:
-            source_label += f" ({top_chunk.page_number})"
-        
-        if len(lines) <= 4:
-            body = "\n".join(lines)
-        else:
-            body = "\n".join(lines[:4])
+        # 2. Extract most relevant sentences or paragraphs from retrieved chunks
+        paragraphs = [p.strip() for p in chunk_text.split("\n\n") if p.strip()]
+        if not paragraphs:
+            paragraphs = [p.strip() for p in chunk_text.split("\n") if p.strip()]
 
-        return f"{source_label}:\n\n{body}"
+        selected_parts = []
+        if content_query_words:
+            # Score paragraphs by query overlap
+            for p in paragraphs:
+                p_lower = p.lower()
+                overlap_count = sum(1 for w in content_query_words if w in p_lower)
+                if overlap_count > 0:
+                    selected_parts.append((p, overlap_count))
+            selected_parts.sort(key=lambda x: x[1], reverse=True)
+
+        if selected_parts:
+            chosen_text = "\n\n".join(p[0] for p in selected_parts[:2])
+        else:
+            # Fall back to top paragraphs
+            chosen_text = "\n\n".join(paragraphs[:3]) if len(paragraphs) >= 3 else chunk_text
+
+        body = cls._humanize(chosen_text)
+
+        source_info = top_chunk.source_name
+        if top_chunk.page_number:
+            source_info += f" ({top_chunk.page_number})"
+
+        return f"Here is what I found in our knowledge base:\n\n{body}\n\n*(Source: {source_info})*"
+
+    @staticmethod
+    def _humanize(text: str) -> str:
+        """
+        Strip document markup (markdown headings, bold markers, list syntax) so the answer
+        reads as prose instead of a raw chunk dump. The facts are untouched.
+        """
+        import re
+
+        cleaned = re.sub(r"^\s*#{1,6}\s*", "", text, flags=re.MULTILINE)
+        cleaned = cleaned.replace("**", "").replace("__", "")
+        cleaned = re.sub(r"^\s*[-*]\s+", "• ", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip()

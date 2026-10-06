@@ -21,6 +21,7 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
 
   // Action Loading states
   const [uploading, setUploading] = useState(false);
+  const [seedingSample, setSeedingSample] = useState(false);
   const [submittingWebsite, setSubmittingWebsite] = useState(false);
   const [submittingSocial, setSubmittingSocial] = useState(false);
   const [submittingInstruction, setSubmittingInstruction] = useState(false);
@@ -80,6 +81,20 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
       showToast(err.userMessage || 'Failed to upload file.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Seed Pre-Packaged Demo Sample Document
+  const handleSeedSample = async (sampleKey, label) => {
+    setSeedingSample(true);
+    try {
+      await knowledgeService.seedSampleDocument(botId, sampleKey);
+      showToast(`Indexed official demo guide: "${label}"!`);
+      await fetchSources();
+    } catch (err) {
+      showToast(err.userMessage || 'Failed to seed sample document.');
+    } finally {
+      setSeedingSample(false);
     }
   };
 
@@ -216,7 +231,56 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
         <div>
           {/* FILES & DOCUMENTS SECTION */}
           {subTab === 'files' && (
-            <div className="grid" style={{ gridTemplateColumns: '1.2fr 0.8fr' }}>
+            <div>
+              {/* Quick Demo Knowledge Guides Seeding Banner */}
+              <div
+                style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '10px',
+                  padding: '14px 18px',
+                  marginBottom: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                }}
+              >
+                <div>
+                  <b style={{ fontSize: '14px', color: '#166534', display: 'block' }}>
+                    ⚡ 1-Click Demo Knowledge Guides
+                  </b>
+                  <span style={{ fontSize: '12px', color: '#15803d' }}>
+                    Seed pre-verified industry knowledge documents directly into this bot's pgvector RAG database
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <Button
+                    variant="secondary"
+                    disabled={seedingSample}
+                    onClick={() => handleSeedSample('real_estate', 'Prycoons Real Estate Guide')}
+                  >
+                    🏢 Prycoons Real Estate
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={seedingSample}
+                    onClick={() => handleSeedSample('healthcare', 'Apex Healthcare Clinic Guide')}
+                  >
+                    🏥 Apex Healthcare
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={seedingSample}
+                    onClick={() => handleSeedSample('saas', 'CloudScale SaaS Docs')}
+                  >
+                    ☁️ CloudScale SaaS
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid" style={{ gridTemplateColumns: '1.2fr 0.8fr' }}>
               <Card>
                 <div className="page-head" style={{ marginBottom: '16px' }}>
                   <div>
@@ -267,7 +331,22 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                             <b style={{ fontSize: '14px', display: 'block' }}>{item.name}</b>
                             <span className="muted" style={{ fontSize: '12px' }}>
                               {formatFileSize(item.file_size)} · {item.chunks_count} chunks extracted
+                              {item.processing_status === 'COMPLETED' ? ' · ✓ Ready' : ''}
                             </span>
+                            {item.processing_status === 'FAILED' && item.error_message && (
+                              <span
+                                style={{
+                                  fontSize: '11.5px',
+                                  color: '#b91c1c',
+                                  display: 'block',
+                                  marginTop: '4px',
+                                  maxWidth: '420px',
+                                  lineHeight: '1.45',
+                                }}
+                              >
+                                ⚠ {item.error_message}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -335,6 +414,7 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                     ref={fileInputRef}
                     style={{ display: 'none' }}
                     accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp"
+                    onClick={(e) => e.stopPropagation()}
                     onChange={handleFileUpload}
                   />
                   <div style={{ fontSize: '32px', marginBottom: '8px' }}>📁</div>
@@ -356,7 +436,8 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                 </div>
               </Card>
             </div>
-          )}
+          </div>
+        )}
 
           {/* WEBSITES SECTION */}
           {subTab === 'websites' && (
@@ -731,6 +812,11 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
               <p>
                 <b>Chunks Generated:</b> {selectedSource.chunks_count}
               </p>
+              {selectedSource.error_message && (
+                <p style={{ color: '#b91c1c' }}>
+                  <b>Error:</b> {selectedSource.error_message}
+                </p>
+              )}
               {selectedSource.file_size && (
                 <p>
                   <b>File Size:</b> {formatFileSize(selectedSource.file_size)}

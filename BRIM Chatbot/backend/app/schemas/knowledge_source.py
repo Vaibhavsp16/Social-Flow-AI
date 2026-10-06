@@ -60,5 +60,6 @@ class KnowledgeSourceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     extracted_text_preview: Optional[str] = None
+    extracted_text: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

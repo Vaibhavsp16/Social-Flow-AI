@@ -38,3 +38,6 @@ __pycache__/
 *.py[cod]
 *.db
 *.sqlite3
+
+# Node compile cache
+node-compile-cache/

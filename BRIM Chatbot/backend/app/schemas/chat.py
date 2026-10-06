@@ -11,7 +11,7 @@ class ChatQueryRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000, description="User question")
     conversation_history: Optional[List[ChatMessage]] = Field(default_factory=list, description="Recent conversation history")
     top_k: Optional[int] = Field(default=4, ge=1, le=10)
-    threshold: Optional[float] = Field(default=0.20, ge=0.0, le=1.0)
+    threshold: Optional[float] = Field(default=0.02, ge=0.0, le=1.0)
 
 class SourceCitation(BaseModel):
     source_id: int

@@ -1,0 +1,22 @@
+# Apex Healthcare Wellness & Multispecialty Clinic Guide
+
+## Overview
+Apex Healthcare is a multispecialty outpatient clinic and diagnostic center providing cardiology, orthopedics, pediatrics, and general medicine services.
+
+## Clinical Specialties & Medical Team
+- **Cardiology**: Dr. Rajesh Verma (MD, DM Cardiology) — Consultations on Monday, Wednesday, Friday: 9:00 AM – 1:00 PM.
+- **Orthopedics & Joint Care**: Dr. Meera Shenoy (MS Ortho) — Consultations on Tuesday, Thursday, Saturday: 2:00 PM – 6:00 PM.
+- **Pediatrics & Child Wellness**: Dr. Anand Patel (MD Pediatrics) — Daily: 10:00 AM – 4:00 PM.
+- **Internal Medicine & Diabetes**: Dr. Sunita Rao (MD Medicine) — Daily: 8:00 AM – 2:00 PM.
+
+## Consultation Fees & Diagnostics
+- **General OPD Consultation**: ₹600.
+- **Super Specialist Consultation**: ₹1,200.
+- **Follow-up Visits**: Free within 7 days of initial visit.
+- **Diagnostic Facilities**: 1.5 Tesla MRI, 64-slice CT Scan, Digital X-Ray, Color Doppler Ultrasound, Pathology Laboratory. Full-body executive health checkups start at ₹3,499.
+
+## Appointments & Emergency Protocols
+- **Emergency Room**: Open 24 hours, 7 days a week for trauma, acute chest pain, and respiratory distress.
+- **Ambulance Service**: Dedicated critical care ambulance available by calling 1800-419-9111.
+- **Appointment Booking**: Online via clinic portal or phone at +91 (022) 6789-4321.
+- **Accepted Insurances**: Star Health, Care Health, HDFC ERGO, ICICI Lombard, Max Bupa, and cashless TPA facilities.

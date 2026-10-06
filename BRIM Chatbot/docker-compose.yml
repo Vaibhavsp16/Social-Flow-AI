@@ -1,5 +1,15 @@
-version: '3.8'
-
+# BRIM AI - full stack.
+#
+#   docker compose up -d --build     start everything
+#   docker compose ps                check health
+#   docker compose logs -f backend   follow API logs
+#   docker compose down              stop (data is kept in the postgres_data volume)
+#
+# Frontend: http://localhost:8080      Backend API: http://localhost:8000/api
+#
+# The backend reads backend/.env for application settings (API keys, JWT secret). The
+# database-related values below deliberately override it so the container talks to the
+# `postgres` service instead of 127.0.0.1. `environment` always wins over `env_file`.
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -10,14 +20,61 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-brim_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brim_password_2026}
     ports:
-      - "${POSTGRES_PORT:-5433}:5432"
+      # Host port 5433 avoids clashing with a local PostgreSQL on 5432.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-brim_user} -d ${POSTGRES_DB:-brim_ai_db}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: brim_ai_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Container-to-container networking: service name and internal port.
+      POSTGRES_SERVER: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-brim_ai_db}
+      POSTGRES_USER: ${POSTGRES_USER:-brim_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brim_password_2026}
+      ALLOW_SQLITE_FALLBACK: "false"
+      BACKEND_CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The browser (not the container) calls the API, so this must be reachable from the host.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+    container_name: brim_ai_frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:

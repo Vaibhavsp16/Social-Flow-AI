@@ -12,6 +12,7 @@ import { ErrorState } from '../components/ErrorState';
 import { PREDEFINED_INDUSTRIES } from '../constants/industries';
 import { KnowledgeManager } from '../components/KnowledgeManager';
 import { knowledgeService } from '../services/knowledgeService';
+import { chatService } from '../services/chatService';
 
 export const BotOverview = () => {
   const { id } = useParams();
@@ -20,6 +21,7 @@ export const BotOverview = () => {
 
   const [bot, setBot] = useState(null);
   const [knowledgeList, setKnowledgeList] = useState([]);
+  const [conversations, setConversations] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -42,12 +44,14 @@ export const BotOverview = () => {
     setLoading(true);
     setError(null);
     try {
-      const [data, kSources] = await Promise.all([
+      const [data, kSources, convos] = await Promise.all([
         botService.getBot(id),
         knowledgeService.getBotKnowledge(id).catch(() => []),
+        chatService.listConversations(id, 200).catch(() => null),
       ]);
       setBot(data);
       setKnowledgeList(kSources || []);
+      setConversations(Array.isArray(convos) ? convos : null);
       setEditData({
         name: data.name || '',
         industry: data.project?.industry || 'Real Estate',
@@ -177,8 +181,20 @@ export const BotOverview = () => {
       {activeTab === 'overview' && (
         <div>
           <div className="grid stats">
-            <StatCard label="Conversations" value="0" delta="Ready for traffic" />
-            <StatCard label="Unique users" value="0" delta="No sessions yet" />
+            <StatCard
+              label="Conversations"
+              value={conversations === null ? '—' : conversations.length}
+              delta={conversations && conversations.length ? 'Recorded sessions' : 'No sessions yet'}
+            />
+            <StatCard
+              label="Knowledge sources"
+              value={knowledgeList.length}
+              delta={
+                knowledgeList.length === 0
+                  ? 'Nothing indexed yet'
+                  : `${knowledgeList.reduce((sum, s) => sum + (s.chunks_count || 0), 0)} chunks indexed`
+              }
+            />
             <StatCard label="Language" value={bot.language} />
             <StatCard label="Status" value={bot.status} delta={`Updated ${formattedUpdatedDate}`} />
           </div>
@@ -294,17 +310,51 @@ export const BotOverview = () => {
               <h3 style={{ margin: 0 }}>Chat History</h3>
               <p className="muted">Review and inspect individual user conversations.</p>
             </div>
-            <input className="search" placeholder="Search conversations..." />
           </div>
 
-          <div className="empty" style={{ margin: '20px 0' }}>
-            <div className="empty-icon">💬</div>
-            <h3>No conversations recorded yet</h3>
-            <p>Once users start chatting with this bot, their message logs will be saved and listed here.</p>
-            <Button variant="primary" onClick={() => navigate(`/preview/${bot.id}`)}>
-              Start a Preview Chat
-            </Button>
-          </div>
+          {conversations && conversations.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+              {conversations.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px',
+                    border: '1px solid var(--line)',
+                    borderRadius: '10px',
+                    background: '#fff',
+                  }}
+                >
+                  <div>
+                    <b style={{ fontSize: '14px', display: 'block' }}>Conversation #{c.id}</b>
+                    <span className="muted" style={{ fontSize: '12px' }}>
+                      {c.message_count} messages · {new Date(c.started_at).toLocaleString()} · intent: {c.intent || 'browsing'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span className={`status ${c.status === 'ACTIVE' ? '' : 'draft'}`}>
+                      <span className="dot"></span>
+                      {c.status}
+                    </span>
+                    <Button variant="secondary" onClick={() => navigate(`/chat/${bot.id}?convo=${c.id}`)}>
+                      Open
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty" style={{ margin: '20px 0' }}>
+              <div className="empty-icon">💬</div>
+              <h3>No conversations recorded yet</h3>
+              <p>Once users start chatting with this bot, their message logs will be saved and listed here.</p>
+              <Button variant="primary" onClick={() => navigate(`/chat/${bot.id}`)}>
+                Start a Chat
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 
@@ -412,16 +462,17 @@ export const BotOverview = () => {
                 Manage the knowledge bases connected to this bot.
               </p>
               <div style={{ display: 'grid', gap: '8px', fontSize: '13px' }}>
-                <p>📄 Documents (0 uploaded)</p>
-                <p>🌐 1 Website linked</p>
-                <p>🖼 0 Images</p>
-                <p>✦ Custom prompt instructions</p>
+                <p>📄 Documents ({docsCount} uploaded)</p>
+                <p>🌐 Websites ({webCount} linked)</p>
+                <p>🖼 Images ({imagesCount} uploaded)</p>
+                <p>🔗 Social profiles ({socialCount} linked)</p>
+                <p>✦ Custom prompt instructions ({instrCount})</p>
               </div>
               <Button
                 variant="secondary"
                 full
                 style={{ marginTop: '16px' }}
-                onClick={() => showToast('Knowledge ingestion pipeline scheduled for next sprint')}
+                onClick={() => setActiveTab('knowledge')}
               >
                 Manage sources
               </Button>

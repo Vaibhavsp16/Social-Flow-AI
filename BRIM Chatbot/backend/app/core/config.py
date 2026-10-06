@@ -1,7 +1,12 @@
+import json
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
+
+# Which provider produces the chunk/query vectors. "auto" prefers OpenAI when the API key is
+# usable and falls back to the local deterministic projection otherwise.
+EMBEDDING_PROVIDER_AUTO = "auto"
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "BRIM AI Backend"
@@ -19,15 +24,17 @@ class Settings(BaseSettings):
     
     DATABASE_URL: Union[str, None] = None
 
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5174"
-    ]
+    # Embeddings / LLM
+    OPENAI_API_KEY: Union[str, None] = None
+    EMBEDDING_PROVIDER: str = EMBEDDING_PROVIDER_AUTO
+
+    # CORS. Declared as a plain string so it can be given either as a comma separated list or
+    # as a JSON array in .env; use `cors_origins` to read it as a list.
+    BACKEND_CORS_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:5174,http://127.0.0.1:5174"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -36,9 +43,29 @@ class Settings(BaseSettings):
         extra="allow"
     )
 
+    @property
+    def cors_origins(self) -> List[str]:
+        """Allowed browser origins, accepting either a comma separated list or a JSON array."""
+        raw = (self.BACKEND_CORS_ORIGINS or "").strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+                return [str(o).strip() for o in parsed if str(o).strip()]
+            except json.JSONDecodeError:
+                pass
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
     def get_database_url(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        # Pin the psycopg2 driver explicitly. SQLAlchemy 2.1 resolves a bare
+        # "postgresql://" URL to the psycopg (v3) dialect, which is not installed
+        # by requirements.txt, so the connection would silently fail.
+        return (
+            f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
 
 settings = Settings()

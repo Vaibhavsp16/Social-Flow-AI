@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from app.database.base import Base
 
 class KnowledgeChunk(Base):
@@ -17,6 +18,11 @@ class KnowledgeChunk(Base):
     page_number = Column(String(50), nullable=True)
     metadata_json = Column(Text, default="{}", nullable=False)
     embedding_json = Column(Text, nullable=True)  # JSON-serialized embedding vector (1536 dim)
+    embedding_vector = Column(Vector(1536), nullable=True)  # Native pgvector 1536-dim vector
+    # Which provider produced embedding_vector ('openai' or 'local'). Vectors from different
+    # providers are not comparable, so retrieval only scores chunks from the matching provider.
+    # NULL is treated as 'local' for rows created before this column existed.
+    embedding_provider = Column(String(20), nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     bot = relationship("Bot", back_populates="chunks")

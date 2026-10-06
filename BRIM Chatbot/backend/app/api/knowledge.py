@@ -121,3 +121,23 @@ def delete_knowledge_source(
     Delete a knowledge source and its stored file.
     """
     return KnowledgeService.delete_source(db=db, source_id=source_id, user_id=current_user.id)
+
+@router.get("/knowledge/samples")
+def get_sample_knowledge_documents():
+    """
+    List pre-packaged industry demo knowledge documents.
+    """
+    return KnowledgeService.get_sample_documents()
+
+@router.post("/bots/{bot_id}/knowledge/seed-sample", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
+def seed_sample_knowledge_source(
+    bot_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Seed an official demo knowledge document (Real Estate, Healthcare, SaaS) into the bot's knowledge base.
+    """
+    sample_key = payload.get("sample_key", "real_estate")
+    return KnowledgeService.seed_sample_document(db=db, bot_id=bot_id, sample_key=sample_key, user_id=current_user.id)

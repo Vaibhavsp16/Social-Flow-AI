@@ -20,10 +20,12 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Setup CORS
+# Setup CORS.
+# An explicit origin list is required: "Access-Control-Allow-Origin: *" is not valid together
+# with credentials, and the browser sends the JWT in the Authorization header.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all for development flexibility
+    allow_origins=settings.cors_origins or ["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

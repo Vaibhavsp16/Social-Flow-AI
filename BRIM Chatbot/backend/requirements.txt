@@ -10,6 +10,9 @@ bcrypt>=4.0.1
 python-multipart>=0.0.9
 python-dotenv>=1.0.1
 httpx>=0.27.0
+# Required by app/services/llm_service.py. Without it the OpenAI client cannot be
+# constructed and every answer silently falls back to the deterministic local grounder.
+openai>=1.30.0
 pypdf>=4.0.0
 python-docx>=1.1.0
 beautifulsoup4>=4.12.0

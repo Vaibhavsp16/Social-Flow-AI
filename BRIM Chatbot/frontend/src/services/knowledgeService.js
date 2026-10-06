@@ -13,12 +13,15 @@ export const knowledgeService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 180000,
     });
     return response.data;
   },
 
   async addWebsite(botId, { url, name }) {
-    const response = await api.post(`/bots/${botId}/knowledge/website`, { url, name });
+    const response = await api.post(`/bots/${botId}/knowledge/website`, { url, name }, {
+      timeout: 120000,
+    });
     return response.data;
   },
 
@@ -39,6 +42,16 @@ export const knowledgeService = {
 
   async deleteKnowledgeSource(sourceId) {
     const response = await api.delete(`/knowledge/${sourceId}`);
+    return response.data;
+  },
+
+  async getSampleDocuments() {
+    const response = await api.get('/knowledge/samples');
+    return response.data;
+  },
+
+  async seedSampleDocument(botId, sampleKey) {
+    const response = await api.post(`/bots/${botId}/knowledge/seed-sample`, { sample_key: sampleKey });
     return response.data;
   },
 };
