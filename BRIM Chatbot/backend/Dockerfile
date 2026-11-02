@@ -20,4 +20,5 @@ USER appuser
 EXPOSE 8000
 
 # The application creates the pgvector extension and syncs the schema on startup.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# PORT is injected by managed hosts (Render, Railway, Fly); locally it falls back to 8000.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
