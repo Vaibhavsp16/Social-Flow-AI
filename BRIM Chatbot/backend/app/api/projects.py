@@ -6,6 +6,8 @@ from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from app.services.project_service import ProjectService
 from app.models.user import User
 from app.api.deps import get_current_user
+from app.models.activity import ActivityType
+from app.services.activity_service import log_activity
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -18,7 +20,14 @@ def create_project(
     """
     Create a new project for the authenticated user.
     """
-    return ProjectService.create_project(db=db, project_in=project_in, user_id=current_user.id)
+    project = ProjectService.create_project(db=db, project_in=project_in, user_id=current_user.id)
+    log_activity(
+        db, ActivityType.PROJECT_CREATED.value,
+        user_id=current_user.id, entity_type="project", entity_id=project.id,
+        metadata={"industry": project.industry},
+    )
+    db.commit()
+    return project
 
 @router.get("", response_model=List[ProjectResponse])
 def get_user_projects(

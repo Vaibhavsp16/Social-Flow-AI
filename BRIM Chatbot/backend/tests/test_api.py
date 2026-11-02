@@ -19,9 +19,12 @@ def test_industries_list():
     assert response.status_code == 200
     industries = response.json()["industries"]
     assert "Real Estate" in industries
-    assert "Technology & SaaS" in industries
+    assert "Fashion" in industries
+    assert "FMCG" in industries
+    assert "Engineering & Manufacturing" in industries
     assert "Healthcare" in industries
-    assert len(industries) == 16
+    # The eight BRIM industries plus the "Other" escape hatch.
+    assert len(industries) == 9
 
 def test_unauthenticated_requests_blocked():
     # Test that protected routes return 401 when no token is supplied
@@ -110,18 +113,18 @@ def test_auth_and_project_bot_flow():
     # 7. Update Bot details and industry
     update_res = client.put(f"/api/bots/{bot_id}", json={
         "name": "Prycoons Real Estate AI Assistant",
-        "industry": "Technology & SaaS",
-        "welcome_message": "Hello! Looking for properties or tech solutions?"
+        "industry": "Jewellery",
+        "welcome_message": "Hello! Looking for properties or jewellery collections?"
     }, headers=headers_a)
     assert update_res.status_code == 200
     assert update_res.json()["name"] == "Prycoons Real Estate AI Assistant"
-    assert update_res.json()["welcome_message"] == "Hello! Looking for properties or tech solutions?"
+    assert update_res.json()["welcome_message"] == "Hello! Looking for properties or jewellery collections?"
 
     # 8. Re-fetch Bot to ensure persistence of updated details
     refetched_bot = client.get(f"/api/bots/{bot_id}", headers=headers_a)
     assert refetched_bot.status_code == 200
     assert refetched_bot.json()["name"] == "Prycoons Real Estate AI Assistant"
-    assert refetched_bot.json()["project"]["industry"] == "Technology & SaaS"
+    assert refetched_bot.json()["project"]["industry"] == "Jewellery"
 
     # 9. Test Authorization Isolation: User B cannot view, edit, or delete User A's data
     signup_b = client.post("/api/auth/signup", json={

@@ -11,7 +11,9 @@ class ChatQueryRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000, description="User question")
     conversation_history: Optional[List[ChatMessage]] = Field(default_factory=list, description="Recent conversation history")
     top_k: Optional[int] = Field(default=4, ge=1, le=10)
-    threshold: Optional[float] = Field(default=0.02, ge=0.0, le=1.0)
+    # Omit to use the provider-aware default in RetrievalService (OpenAI vectors and the local
+    # deterministic projection score on different scales, so one fixed number cannot serve both).
+    threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 class SourceCitation(BaseModel):
     source_id: int
@@ -32,5 +34,20 @@ class ChatQueryResponse(BaseModel):
     bot_id: int
     bot_name: str
     confidence: Optional[float] = 1.0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatTurnResponse(ChatQueryResponse):
+    """Conversation turn: adds the workflow state the real-estate flow exposes."""
+
+    conversation_id: Optional[int] = None
+    status: Optional[str] = None
+    intent: Optional[str] = None
+    stage: Optional[str] = None
+    properties: List[Dict[str, Any]] = []
+    lead: Optional[Dict[str, Any]] = None
+    is_handoff: bool = False
+    conversation_state: Dict[str, Any] = {}
 
     model_config = ConfigDict(from_attributes=True)

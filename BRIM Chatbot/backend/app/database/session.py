@@ -8,8 +8,14 @@ logger = logging.getLogger("uvicorn")
 
 
 def _allow_sqlite_fallback() -> bool:
-    """Development convenience: allow degrading to SQLite when PostgreSQL is unreachable."""
-    return os.getenv("ALLOW_SQLITE_FALLBACK", "true").lower() in ("1", "true", "yes")
+    """
+    Opt-in only: ALLOW_SQLITE_FALLBACK=true in .env.
+
+    Defaulting this to true meant a stopped database container silently produced an empty SQLite
+    database: uploads reported success, nothing was embedded into pgvector, and every answer was
+    a refusal. Failing to start is the honest behaviour; the error names the real cause.
+    """
+    return os.getenv("ALLOW_SQLITE_FALLBACK", "false").lower() in ("1", "true", "yes")
 
 
 def create_db_engine():
@@ -85,6 +91,16 @@ def _sync_schema():
     knowledge pipeline silently produces no chunks.
     """
     from app.models import Base as ModelsBase
+
+    # Widen page_number in place: create_all cannot alter it, and crawled page URLs are longer
+    # than the original 50 characters. Idempotent — Postgres accepts re-widening.
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE knowledge_chunks ALTER COLUMN page_number TYPE VARCHAR(500)")
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Could not widen knowledge_chunks.page_number: {exc}")
 
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())

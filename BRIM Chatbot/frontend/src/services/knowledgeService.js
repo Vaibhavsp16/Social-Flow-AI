@@ -18,15 +18,23 @@ export const knowledgeService = {
     return response.data;
   },
 
-  async addWebsite(botId, { url, name }) {
-    const response = await api.post(`/bots/${botId}/knowledge/website`, { url, name }, {
-      timeout: 120000,
-    });
+  async addWebsite(botId, { url, name, maxPages = 1 }) {
+    // A multi-page crawl fetches and embeds several pages, so it needs a longer ceiling.
+    const response = await api.post(
+      `/bots/${botId}/knowledge/website`,
+      { url, name, max_pages: maxPages },
+      { timeout: 180000 }
+    );
     return response.data;
   },
 
-  async addSocialLink(botId, { url, platform, name }) {
-    const response = await api.post(`/bots/${botId}/knowledge/social`, { url, platform, name });
+  async addSocialLink(botId, { url, platform, name, caption }) {
+    const response = await api.post(`/bots/${botId}/knowledge/social`, {
+      url,
+      platform,
+      name,
+      caption: caption || undefined,
+    });
     return response.data;
   },
 
@@ -52,6 +60,21 @@ export const knowledgeService = {
 
   async seedSampleDocument(botId, sampleKey) {
     const response = await api.post(`/bots/${botId}/knowledge/seed-sample`, { sample_key: sampleKey });
+    return response.data;
+  },
+
+  // The eight BRIM industries (brim.co.in/industry) and their ready-to-index knowledge packs.
+  async getIndustryPacks() {
+    const response = await api.get('/knowledge/industry-packs');
+    return response.data;
+  },
+
+  async seedIndustryPack(botId, industryKey) {
+    const response = await api.post(
+      `/bots/${botId}/knowledge/seed-industry`,
+      { industry_key: industryKey },
+      { timeout: 180000 }
+    );
     return response.data;
   },
 };

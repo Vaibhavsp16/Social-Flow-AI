@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "notice": "Configurable festival calendar for greeting context. Dates follow the 2026 Indian calendar and are indicative for the demo; update this file (or point HOLIDAY_FILE elsewhere) for production.",
+    "timezone": "Asia/Kolkata"
+  },
+  "holidays": [
+    { "date": "2026-01-01", "name": "New Year", "names": { "hi": "नया साल", "gu": "નવું વર્ષ", "mr": "नववर्ष" } },
+    { "date": "2026-01-14", "name": "Uttarayan", "names": { "hi": "उत्तरायण", "gu": "ઉત્તરાયણ", "mr": "उत्तरायण" } },
+    { "date": "2026-01-26", "name": "Republic Day", "names": { "hi": "गणतंत्र दिवस", "gu": "પ્રજાસત્તાક દિન", "mr": "प्रजासत्ताक दिन" } },
+    { "date": "2026-03-04", "name": "Holi", "names": { "hi": "होली", "gu": "હોળી", "mr": "होळी" } },
+    { "date": "2026-03-20", "name": "Eid-ul-Fitr", "names": { "hi": "ईद-उल-फ़ितर", "gu": "ઈદ-ઉલ-ફિતર", "mr": "ईद-उल-फितर" } },
+    { "date": "2026-08-15", "name": "Independence Day", "names": { "hi": "स्वतंत्रता दिवस", "gu": "સ્વતંત્રતા દિવસ", "mr": "स्वातंत्र्य दिन" } },
+    { "date": "2026-08-28", "name": "Raksha Bandhan", "names": { "hi": "रक्षा बंधन", "gu": "રક્ષાબંધન", "mr": "रक्षाबंधन" } },
+    { "date": "2026-09-04", "name": "Janmashtami", "names": { "hi": "जन्माष्टमी", "gu": "જન્માષ્ટમી", "mr": "जन्माष्टमी" } },
+    { "date": "2026-09-14", "name": "Ganesh Chaturthi", "names": { "hi": "गणेश चतुर्थी", "gu": "ગણેશ ચતુર્થી", "mr": "गणेश चतुर्थी" } },
+    { "date": "2026-10-02", "name": "Gandhi Jayanti", "names": { "hi": "गांधी जयंती", "gu": "ગાંધી જયંતી", "mr": "गांधी जयंती" } },
+    { "date": "2026-10-20", "name": "Dussehra", "names": { "hi": "दशहरा", "gu": "દશેરા", "mr": "दसरा" } },
+    { "date": "2026-11-08", "name": "Diwali", "names": { "hi": "दिवाली", "gu": "દિવાળી", "mr": "दिवाळी" } },
+    { "date": "2026-12-25", "name": "Christmas", "names": { "hi": "क्रिसमस", "gu": "ક્રિસમસ", "mr": "ख्रिसमस" } }
+  ]
+}

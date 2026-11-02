@@ -31,11 +31,24 @@ STOP_WORDS = {
 
 class EmbeddingService:
     DIMENSION = 1536
+    # Exposed on the class because callers (retrieval, knowledge pipeline) refer to them as
+    # attributes; the module-level names below stay for existing imports.
+    PROVIDER_OPENAI = PROVIDER_OPENAI
+    PROVIDER_LOCAL = PROVIDER_LOCAL
 
     _openai_quota_exhausted: bool = False
     _openai_last_checked: float = 0.0
 
     # ── Provider selection ────────────────────────────────────────────────────
+
+    @classmethod
+    def _configured_provider(cls) -> str:
+        """
+        Explicit provider override from configuration ("openai" or "local"), else "auto".
+
+        "auto" prefers OpenAI when a usable key is present and degrades to the local engine.
+        """
+        return (os.getenv("EMBEDDING_PROVIDER") or "auto").strip().lower()
 
     @classmethod
     def active_provider(cls) -> str:
@@ -44,6 +57,8 @@ class EmbeddingService:
 
         Used to decide which stored vectors are comparable with a freshly embedded query.
         """
+        if cls._configured_provider() == PROVIDER_LOCAL:
+            return PROVIDER_LOCAL
         key = os.getenv("OPENAI_API_KEY") or ""
         if (
             key.startswith("sk-")
@@ -68,6 +83,7 @@ class EmbeddingService:
         now = time.time()
         if (
             openai_key
+            and cls._configured_provider() != PROVIDER_LOCAL
             and openai_key.startswith("sk-")
             and len(openai_key) > 20
             and (not cls._openai_quota_exhausted or now - cls._openai_last_checked > 300)

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { knowledgeService } from '../services/knowledgeService';
+import { botService } from '../services/botService';
 import { useToast } from '../context/ToastContext';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -21,14 +22,22 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
 
   // Action Loading states
   const [uploading, setUploading] = useState(false);
-  const [seedingSample, setSeedingSample] = useState(false);
+  const [seedingPack, setSeedingPack] = useState(false);
   const [submittingWebsite, setSubmittingWebsite] = useState(false);
   const [submittingSocial, setSubmittingSocial] = useState(false);
   const [submittingInstruction, setSubmittingInstruction] = useState(false);
 
   // Forms State
-  const [websiteForm, setWebsiteForm] = useState({ url: '', name: '' });
-  const [socialForm, setSocialForm] = useState({ url: '', platform: 'LinkedIn', name: '' });
+  const [websiteForm, setWebsiteForm] = useState({ url: '', name: '', maxPages: 5 });
+  const [industryPacks, setIndustryPacks] = useState([]);
+  const [industryPackKey, setIndustryPackKey] = useState('real-estate');
+  const [botIndustry, setBotIndustry] = useState(null);
+  const [socialForm, setSocialForm] = useState({
+    url: '',
+    platform: 'LinkedIn',
+    name: '',
+    caption: '',
+  });
   const [instructionForm, setInstructionForm] = useState({
     name: 'Primary Business Guidelines',
     instructions: '',
@@ -60,6 +69,42 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
     }
   }, [botId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    knowledgeService
+      .getIndustryPacks()
+      .then((packs) => {
+        if (cancelled) return;
+        setIndustryPacks(packs || []);
+        if (packs?.length) setIndustryPackKey(packs[0].key);
+      })
+      .catch((err) => console.warn('Could not load BRIM industry packs:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Default the picker to this bot's own industry, not always Real Estate.
+  useEffect(() => {
+    if (!botId) return;
+    let cancelled = false;
+    botService
+      .getBot(botId)
+      .then((data) => {
+        if (!cancelled) setBotIndustry(data?.project?.industry || null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [botId]);
+
+  useEffect(() => {
+    if (!industryPacks.length || !botIndustry) return;
+    const match = industryPacks.find((pack) => pack.industry === botIndustry);
+    if (match) setIndustryPackKey(match.key);
+  }, [industryPacks, botIndustry]);
+
   // File Upload Handler
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -84,17 +129,18 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
     }
   };
 
-  // Seed Pre-Packaged Demo Sample Document
-  const handleSeedSample = async (sampleKey, label) => {
-    setSeedingSample(true);
+  // Index the BRIM knowledge pack for one industry
+  const handleSeedIndustryPack = async () => {
+    const pack = industryPacks.find((item) => item.key === industryPackKey);
+    setSeedingPack(true);
     try {
-      await knowledgeService.seedSampleDocument(botId, sampleKey);
-      showToast(`Indexed official demo guide: "${label}"!`);
+      await knowledgeService.seedIndustryPack(botId, industryPackKey);
+      showToast(`Indexed BRIM knowledge: "${pack?.name || industryPackKey}"`);
       await fetchSources();
     } catch (err) {
-      showToast(err.userMessage || 'Failed to seed sample document.');
+      showToast(err.userMessage || 'Failed to index the industry pack.');
     } finally {
-      setSeedingSample(false);
+      setSeedingPack(false);
     }
   };
 
@@ -108,9 +154,14 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
 
     setSubmittingWebsite(true);
     try {
-      await knowledgeService.addWebsite(botId, websiteForm);
-      showToast('Website fetched and indexed successfully!');
-      setWebsiteForm({ url: '', name: '' });
+      const source = await knowledgeService.addWebsite(botId, websiteForm);
+      const pages = source?.metadata_json ? JSON.parse(source.metadata_json).pages_crawled : null;
+      showToast(
+        pages
+          ? `Crawled ${pages} page${pages === 1 ? '' : 's'} and indexed ${source.chunks_count} chunks!`
+          : 'Website fetched and indexed successfully!'
+      );
+      setWebsiteForm({ url: '', name: '', maxPages: websiteForm.maxPages });
       await fetchSources();
     } catch (err) {
       showToast(err.userMessage || 'Failed to scrape website.');
@@ -129,9 +180,13 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
 
     setSubmittingSocial(true);
     try {
-      await knowledgeService.addSocialLink(botId, socialForm);
-      showToast('Social profile link recorded!');
-      setSocialForm({ url: '', platform: 'LinkedIn', name: '' });
+      const created = await knowledgeService.addSocialLink(botId, socialForm);
+      showToast(
+        created?.chunks_count > 0
+          ? 'Social post indexed and ready to answer questions!'
+          : 'Social profile link recorded!'
+      );
+      setSocialForm({ url: '', platform: 'LinkedIn', name: '', caption: '' });
       await fetchSources();
     } catch (err) {
       showToast(err.userMessage || 'Failed to add social link.');
@@ -247,35 +302,40 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                   gap: '12px',
                 }}
               >
-                <div>
+                <div style={{ flex: '1 1 320px' }}>
                   <b style={{ fontSize: '14px', color: '#166534', display: 'block' }}>
-                    ⚡ 1-Click Demo Knowledge Guides
+                    ⚡ BRIM industry knowledge packs
                   </b>
                   <span style={{ fontSize: '12px', color: '#15803d' }}>
-                    Seed pre-verified industry knowledge documents directly into this bot's pgvector RAG database
+                    The content of brim.co.in/industry for the selected industry, indexed straight into this
+                    bot's vector store.
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select
+                    value={industryPackKey}
+                    onChange={(e) => setIndustryPackKey(e.target.value)}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #bbf7d0',
+                      fontSize: '13px',
+                      background: '#fff',
+                      minWidth: '240px',
+                    }}
+                  >
+                    {industryPacks.map((pack) => (
+                      <option key={pack.key} value={pack.key}>
+                        {pack.industry}
+                      </option>
+                    ))}
+                  </select>
                   <Button
                     variant="secondary"
-                    disabled={seedingSample}
-                    onClick={() => handleSeedSample('real_estate', 'Prycoons Real Estate Guide')}
+                    disabled={seedingPack || industryPacks.length === 0}
+                    onClick={handleSeedIndustryPack}
                   >
-                    🏢 Prycoons Real Estate
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={seedingSample}
-                    onClick={() => handleSeedSample('healthcare', 'Apex Healthcare Clinic Guide')}
-                  >
-                    🏥 Apex Healthcare
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={seedingSample}
-                    onClick={() => handleSeedSample('saas', 'CloudScale SaaS Docs')}
-                  >
-                    ☁️ CloudScale SaaS
+                    {seedingPack ? 'Indexing…' : 'Index pack'}
                   </Button>
                 </div>
               </div>
@@ -395,7 +455,10 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
               <Card>
                 <h3 style={{ marginBottom: '6px' }}>Upload New File</h3>
                 <p className="muted" style={{ fontSize: '13px', marginBottom: '18px' }}>
-                  Supported formats: <b>.PDF, .DOC, .DOCX, .TXT, .PNG, .JPG, .WEBP</b> (Max 25MB)
+                  Supported formats:{' '}
+                  <b>.PDF, .DOC, .DOCX, .TXT, .DXF, .DWG, .PNG, .JPG, .WEBP</b> (Max 25MB).
+                  Scanned and image-only PDFs, plan drawings and AutoCAD files are read
+                  automatically.
                 </p>
 
                 <div
@@ -413,7 +476,7 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                     type="file"
                     ref={fileInputRef}
                     style={{ display: 'none' }}
-                    accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp"
+                    accept=".pdf,.doc,.docx,.txt,.dxf,.dwg,.png,.jpg,.jpeg,.webp"
                     onClick={(e) => e.stopPropagation()}
                     onChange={handleFileUpload}
                   />
@@ -486,7 +549,20 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                           </a>
                           <span className="muted" style={{ fontSize: '12px', display: 'block', marginTop: '2px' }}>
                             {item.chunks_count} text chunks extracted
+                            {(() => {
+                              try {
+                                const pages = JSON.parse(item.metadata_json || '{}').pages_crawled;
+                                return pages ? ` · ${pages} page${pages === 1 ? '' : 's'} crawled` : '';
+                              } catch {
+                                return '';
+                              }
+                            })()}
                           </span>
+                          {item.processing_status === 'FAILED' && item.error_message && (
+                            <span style={{ fontSize: '11.5px', color: '#b91c1c', display: 'block', marginTop: '4px' }}>
+                              ⚠ {item.error_message}
+                            </span>
+                          )}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -519,14 +595,14 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
               <Card>
                 <h3 style={{ marginBottom: '6px' }}>Add Website URL</h3>
                 <p className="muted" style={{ fontSize: '13px', marginBottom: '18px' }}>
-                  The engine will fetch the page, strip HTML navigation tags, and extract clean business text.
+                  The crawler strips navigation and popups, then extracts clean business text from each page.
                 </p>
 
                 <form onSubmit={handleAddWebsite}>
                   <Input
                     label="Page or Site URL"
                     required
-                    placeholder="https://example.com/about"
+                    placeholder="https://brim.co.in/industry/real-estate/"
                     value={websiteForm.url}
                     onChange={(e) => setWebsiteForm({ ...websiteForm, url: e.target.value })}
                   />
@@ -537,6 +613,25 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                     value={websiteForm.name}
                     onChange={(e) => setWebsiteForm({ ...websiteForm, name: e.target.value })}
                   />
+
+                  <div className="field">
+                    <label>Pages to crawl</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={websiteForm.maxPages}
+                      onChange={(e) =>
+                        setWebsiteForm({
+                          ...websiteForm,
+                          maxPages: Math.max(1, Math.min(12, Number(e.target.value) || 1)),
+                        })
+                      }
+                    />
+                    <span className="muted" style={{ fontSize: '12px' }}>
+                      Set 1 to index only this page. Higher values follow same-site links found on it (max 12).
+                    </span>
+                  </div>
 
                   <div style={{ marginTop: '16px' }}>
                     <Button type="submit" variant="primary" full loading={submittingWebsite}>
@@ -643,6 +738,19 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                     value={socialForm.name}
                     onChange={(e) => setSocialForm({ ...socialForm, name: e.target.value })}
                   />
+
+                  <div className="field">
+                    <label>Caption / Post Text (Recommended)</label>
+                    <textarea
+                      rows="4"
+                      placeholder="Paste the caption below the post here. Instagram, Facebook and TikTok block automated reads, so pasting the caption is what lets the assistant answer questions about it."
+                      value={socialForm.caption}
+                      onChange={(e) => setSocialForm({ ...socialForm, caption: e.target.value })}
+                    />
+                    <span className="muted" style={{ fontSize: '12px' }}>
+                      Hashtags and @mentions are detected from this text automatically.
+                    </span>
+                  </div>
 
                   <div style={{ marginTop: '16px' }}>
                     <Button type="submit" variant="primary" full loading={submittingSocial}>

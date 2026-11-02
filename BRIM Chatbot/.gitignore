@@ -56,3 +56,16 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+# .env holds the live key; never commit it.
+.env
+backend/.env
+frontend/.env
+# Local database/backup artefacts and browser-test captures
+artifacts/*.sql
+artifacts/*.png
+artifacts/*.md
+
+# Generated test documents (recreate with backend/scripts/make_test_fixtures.py)
+backend/_fixtures/
+backend/_diag_tmp/
+backend/_verify_tmp/

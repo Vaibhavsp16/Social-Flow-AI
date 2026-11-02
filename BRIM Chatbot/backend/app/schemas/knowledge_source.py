@@ -6,6 +6,8 @@ from app.core.constants import KnowledgeSourceType, ProcessingStatus
 class WebsiteCreate(BaseModel):
     url: str = Field(..., description="Website URL to ingest")
     name: Optional[str] = None
+    # 1 = only the given page. >1 follows same-site links found on it (bounded crawl).
+    max_pages: Optional[int] = Field(default=1, ge=1, le=12)
 
     @field_validator("url")
     @classmethod
@@ -18,9 +20,16 @@ class WebsiteCreate(BaseModel):
         return v
 
 class SocialLinkCreate(BaseModel):
-    url: str = Field(..., description="Social media profile URL")
+    url: str = Field(..., description="Social media profile or post URL")
     platform: Optional[str] = None
     name: Optional[str] = None
+    # Platforms routinely refuse server-side reads of a post. Pasting the caption guarantees
+    # the content is answerable, and hashtags are parsed out of it automatically.
+    caption: Optional[str] = Field(
+        default=None,
+        max_length=8000,
+        description="Optional caption or description text copied from the post",
+    )
 
     @field_validator("url")
     @classmethod

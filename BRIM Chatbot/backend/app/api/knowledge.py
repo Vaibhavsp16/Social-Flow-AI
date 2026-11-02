@@ -55,13 +55,14 @@ def add_website_direct(
     bot_id: int = Form(...),
     url: str = Form(...),
     name: str = Form(None),
+    max_pages: int = Form(1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     Direct endpoint for adding a website URL.
     """
-    website_in = WebsiteCreate(url=url, name=name)
+    website_in = WebsiteCreate(url=url, name=name, max_pages=max_pages)
     return KnowledgeService.add_website(db=db, bot_id=bot_id, website_in=website_in, user_id=current_user.id)
 
 @router.post("/bots/{bot_id}/knowledge/social", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
@@ -87,6 +88,22 @@ def add_instructions(
     Configure custom business prompts, tone, restrictions, and objectives.
     """
     return KnowledgeService.add_instructions(db=db, bot_id=bot_id, instr_in=instr_in, user_id=current_user.id)
+
+# Static /knowledge/* routes must be declared before /knowledge/{source_id}: Starlette matches
+# in declaration order, so a dynamic route declared first would swallow "industry-packs".
+@router.get("/knowledge/industry-packs")
+def get_industry_knowledge_packs():
+    """
+    List the eight BRIM industries and the knowledge pack available for each.
+    """
+    return KnowledgeService.get_industry_packs()
+
+@router.get("/knowledge/samples")
+def get_sample_knowledge_documents():
+    """
+    List pre-packaged industry demo knowledge documents.
+    """
+    return KnowledgeService.get_sample_documents()
 
 @router.get("/knowledge/{source_id}", response_model=KnowledgeSourceResponse)
 def get_knowledge_source(
@@ -122,12 +139,20 @@ def delete_knowledge_source(
     """
     return KnowledgeService.delete_source(db=db, source_id=source_id, user_id=current_user.id)
 
-@router.get("/knowledge/samples")
-def get_sample_knowledge_documents():
+@router.post("/bots/{bot_id}/knowledge/seed-industry", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
+def seed_industry_knowledge_pack(
+    bot_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    List pre-packaged industry demo knowledge documents.
+    Attach the BRIM knowledge pack for one industry (key or display name) to a bot.
     """
-    return KnowledgeService.get_sample_documents()
+    industry_key = payload.get("industry_key") or payload.get("industry") or "real-estate"
+    return KnowledgeService.seed_industry_pack(
+        db=db, bot_id=bot_id, industry_key=industry_key, user_id=current_user.id
+    )
 
 @router.post("/bots/{bot_id}/knowledge/seed-sample", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
 def seed_sample_knowledge_source(

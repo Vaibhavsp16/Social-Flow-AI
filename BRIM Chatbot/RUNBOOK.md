@@ -17,6 +17,44 @@ BRIM Chatbot/
 
 ---
 
+## Demo account (ready to use)
+
+The workspace is pre-seeded so the demo starts on real content, not an empty dashboard.
+
+| Item | Value |
+|---|---|
+| Login | `demo@brim.ai` / `Demo@12345` |
+| Project | BRIM Branding Studio (Real Estate) |
+| Bot | BRIM Property Advisor — Real Estate knowledge pack indexed (6 chunks) |
+
+Rebuild it at any time (idempotent — it logs in and refreshes instead of duplicating):
+
+```bash
+cd backend
+python scripts/seed_demo_account.py
+```
+
+`scripts/clean_test_data.sql` removes the `*@example.com` accounts created by the test suite
+without touching real accounts. Take a `pg_dump` first.
+
+---
+
+## BRIM industry knowledge packs
+
+The eight industries from https://brim.co.in/industry/ each have a committed text snapshot in
+`backend/demo_documents/brim/`. Seeding one indexes the agency's positioning, service catalogue and
+FAQs for that industry. Rebuild the snapshots from the live site when the content changes:
+
+```bash
+cd backend
+python scripts/build_industry_packs.py
+```
+
+`GET /api/knowledge/industry-packs` lists them; `POST /api/bots/{id}/knowledge/seed-industry` with
+`{"industry_key": "jewellery"}` attaches one (re-seeding refreshes, never duplicates).
+
+---
+
 ## Prerequisites
 
 | Tool | Notes |
@@ -230,3 +268,59 @@ Postgres host port is configurable: `POSTGRES_HOST_PORT=5434 docker compose up -
 docker compose down -v && docker compose up -d postgres
 ```
 Then restart the backend — it recreates the schema, the pgvector extension and the seed documents.
+
+---
+
+## Real-estate demo (Phase 5)
+
+The Real Estate bot runs a guided flow: greeting → buy/rent/browse → requirements → shortlist →
+lead capture → confirmation, with human handoff available at any point.
+
+**Scripted end-to-end check (no server needed, database only):**
+
+```bash
+cd backend
+python scripts/demo_real_estate.py
+```
+
+It prints the buying, renting, browsing, handoff and "no invented listing" transcripts, and the lead
+row that was captured.
+
+**Live demo lines** (use the demo account, open the Real Estate bot's chat):
+
+1. `I'm looking to buy a 3 BHK apartment in Ambli, budget around 2 crore` → shortlist card
+2. `can someone call me?` → lead capture starts
+3. `Ravi Patel` → `98765 43210` → `ravi.patel@example.com` → `WhatsApp` → confirmation
+4. `What services does BRIM offer for real estate brands?` → grounded answer with citations
+5. Fresh chat: `I want a 2 BHK on rent in Bopal under 40k` → rental shortlist (or an honest
+   "no exact match, here are closest")
+6. Fresh chat: `I'd rather speak to a human advisor` → conversation status HANDOFF_REQUESTED
+7. Fresh chat: `Do you have a 5 BHK penthouse in Gandhinagar?` → no invented listing
+
+**Inventory:** `backend/demo_documents/prycoons_properties.json` is development data (13 records,
+all `is_mock=true`). Seed per bot with `POST /api/bots/{id}/properties/seed` or automatically on the
+first chat turn. Leads: `GET /api/bots/{id}/leads`.
+
+**LLM:** no API key is configured. Answers use the local deterministic synthesiser and local
+embeddings. To enable Puter.js in the browser, set `VITE_USE_PUTER=true` in `frontend/.env` and sign
+in to a Puter account in that browser.
+
+---
+
+## Contextual greeting + multilingual demo
+
+Open a Real Estate bot's chat. The opening message is generated server-side and stored, so it
+respects the visitor's time of day, language and (if permitted) city.
+
+1. **Late-night / morning greeting** — open a new chat; the greeting matches the current hour.
+2. **Deny location** — when Chrome asks, block it. The chat still opens (time-only greeting).
+   Allow it instead and the greeting may add a one-line weather note for the city.
+3. **Hindi** — select "हिन्दी" in the header dropdown, then send
+   `मुझे 3 बीएचके फ्लैट चाहिए अंबली में` → Hindi reply with an Orion Heights card.
+   Follow with `बजट 2 करोड़ है` → Hindi shortlist.
+4. **Switch back** — set the dropdown to Auto and send `can someone call me?` → English reply,
+   with Ambli / 3 BHK / ₹2.0 Cr still on the state chips (language changed, state did not).
+5. **Refusal** — ask something outside the knowledge base → the refusal is in the visitor's
+   language and carries no citations.
+
+Environment switches and the external API list are in `CONTEXT_AND_LANGUAGE.md`.

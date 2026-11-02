@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 export const Sidebar = ({ isOpen, onClose }) => {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -21,6 +21,11 @@ export const Sidebar = ({ isOpen, onClose }) => {
     { to: '/analytics', label: '▥  Analytics' },
     { to: '/pricing', label: '◇  Pricing' },
   ];
+
+  // Admin navigation is only rendered for admin accounts; the API enforces the same rule.
+  if (user?.role === 'ADMIN') {
+    navItems.push({ to: '/admin', label: 'Admin console' });
+  }
 
   return (
     <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>

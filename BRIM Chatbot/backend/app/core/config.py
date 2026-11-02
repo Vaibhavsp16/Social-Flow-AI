@@ -8,10 +8,14 @@ import os
 EMBEDDING_PROVIDER_AUTO = "auto"
 
 
+DEFAULT_SECRET_KEY = "brim_super_secret_jwt_key_change_in_production_2026_xyz"
+
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "BRIM AI Backend"
     API_V1_STR: str = "/api"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "brim_super_secret_jwt_key_change_in_production_2026_xyz")
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", DEFAULT_SECRET_KEY)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     ALGORITHM: str = "HS256"
 
@@ -69,3 +73,27 @@ class Settings(BaseSettings):
         )
 
 settings = Settings()
+
+# A shared default signing key would let anyone mint a valid token for any deployment. Refuse to
+# start in production with it; in development, warn loudly so it is not forgotten.
+if settings.SECRET_KEY == DEFAULT_SECRET_KEY:
+    if settings.ENVIRONMENT.lower() in {"production", "prod"}:
+        raise RuntimeError(
+            "SECRET_KEY is the development default. Set a unique SECRET_KEY before running in "
+            "production."
+        )
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "SECRET_KEY is the development default — tokens are forgeable. Set SECRET_KEY in .env."
+    )
+
+# EmbeddingService and LLMService read the key straight from the process environment
+# (os.getenv) instead of through this Settings object. pydantic-settings parses .env into the
+# object only, so mirror the resolved values into os.environ once at import: without this a key
+# supplied in .env is invisible to those clients and every request silently degrades to the
+# local deterministic engine. Existing environment variables (Docker, shell) always win.
+for _env_key in ("OPENAI_API_KEY", "EMBEDDING_PROVIDER"):
+    _env_value = getattr(settings, _env_key, None)
+    if _env_value and not os.environ.get(_env_key):
+        os.environ[_env_key] = str(_env_value)

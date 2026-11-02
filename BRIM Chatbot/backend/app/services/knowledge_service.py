@@ -10,6 +10,7 @@ from app.models.knowledge_source import KnowledgeSource
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.bot import Bot
 from app.models.project import Project
+from app.core.net_guard import UnsafeURLError, assert_safe_url
 from app.core.constants import (
     KnowledgeSourceType,
     ProcessingStatus,
@@ -24,8 +25,10 @@ from app.schemas.knowledge_source import (
     InstructionCreate,
     KnowledgeSourceUpdate,
 )
+from app.core.industry_packs import BRIM_INDUSTRY_PACKS, get_pack
 from app.services.document_processor import DocumentProcessor
 from app.services.embedding_service import EmbeddingService
+from app.services.social_service import SocialService
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +105,17 @@ class KnowledgeService:
             source.error_message = None
         else:
             source.processing_status = ProcessingStatus.FAILED.value
-            source.error_message = (
-                "No text could be extracted from this source, so no knowledge chunks were "
-                "created. Check that the content contains selectable text (scanned images "
-                "require OCR) and try again."
-            )
+            if source.source_type == KnowledgeSourceType.IMAGE.value:
+                source.error_message = (
+                    "No text could be read from this image. Image ingestion needs an OCR "
+                    "provider: set OPENAI_API_KEY, or install Tesseract and pytesseract. "
+                    "Upload the text as a document in the meantime."
+                )
+            else:
+                source.error_message = (
+                    "No text could be extracted from this source, so no knowledge chunks were "
+                    "created. Check that the content contains selectable text and try again."
+                )
         db.commit()
 
     @staticmethod
@@ -115,10 +124,14 @@ class KnowledgeService:
         bot_id: int,
         source: KnowledgeSource,
         chunks: List[str],
-        metadata: dict
+        metadata: dict,
+        chunk_pages: Optional[List[str]] = None,
     ):
         """
         Delete previous chunks for this source (if any) and insert newly embedded chunks.
+
+        ``chunk_pages`` optionally carries the page URL each chunk came from, so citations
+        point at the exact crawled page instead of only the seed URL.
         """
         db.query(KnowledgeChunk).filter(KnowledgeChunk.knowledge_source_id == source.id).delete()
 
@@ -127,7 +140,9 @@ class KnowledgeService:
                 continue
             embedding, provider = EmbeddingService.get_embedding_with_provider(chunk_text)
             page_info = None
-            if source.source_type == KnowledgeSourceType.DOCUMENT.value and metadata.get("page_count"):
+            if chunk_pages and idx < len(chunk_pages) and chunk_pages[idx]:
+                page_info = chunk_pages[idx]
+            elif source.source_type == KnowledgeSourceType.DOCUMENT.value and metadata.get("page_count"):
                 page_info = f"Section {idx + 1}"
             elif metadata.get("platform"):
                 page_info = f"Profile: {metadata['platform']}"
@@ -147,6 +162,17 @@ class KnowledgeService:
                 embedding_provider=provider,
             )
             db.add(chunk_record)
+        db.flush()
+
+        from app.models.activity import ActivityType
+        from app.services.activity_service import log_activity
+
+        log_activity(
+            db, ActivityType.KNOWLEDGE_ADDED.value,
+            user_id=getattr(getattr(source.bot, "project", None), "user_id", None),
+            entity_type="knowledge_source", entity_id=source.id,
+            metadata={"source_type": source.source_type, "chunks": len(chunks)},
+        )
         db.commit()
 
     @staticmethod
@@ -194,6 +220,30 @@ class KnowledgeService:
             else KnowledgeSourceType.DOCUMENT.value
         )
 
+        # Re-uploading the same file used to add a second identical source, which then produced
+        # the same passage twice in retrieval and doubled every citation. Replace it instead.
+        duplicate = (
+            db.query(KnowledgeSource)
+            .filter(
+                KnowledgeSource.bot_id == bot_id,
+                KnowledgeSource.original_filename == filename,
+                KnowledgeSource.file_size == file_size,
+            )
+            .first()
+        )
+        if duplicate is not None:
+            db.query(KnowledgeChunk).filter(
+                KnowledgeChunk.knowledge_source_id == duplicate.id
+            ).delete()
+            old_path = duplicate.file_path
+            db.delete(duplicate)
+            db.commit()
+            if old_path and os.path.exists(old_path):
+                try:
+                    os.remove(old_path)
+                except OSError:
+                    pass
+
         # 2. Secure Storage (UUID filename to prevent directory traversal / overwrite)
         unique_filename = f"{uuid.uuid4().hex}{file_ext}"
         storage_path = UPLOAD_DIR / unique_filename
@@ -228,13 +278,26 @@ class KnowledgeService:
                 extracted_text, metadata = DocumentProcessor.extract_from_txt(str(storage_path))
             elif file_ext in ALLOWED_IMAGE_EXTENSIONS:
                 extracted_text, metadata = DocumentProcessor.extract_from_image(str(storage_path))
+            elif file_ext in {".dxf", ".dwg"}:
+                extracted_text, metadata = DocumentProcessor.extract_from_cad(str(storage_path))
 
             chunks = DocumentProcessor.chunk_text(extracted_text)
 
             KnowledgeService._finalize_source(db, source, extracted_text, chunks, metadata)
 
             # Generate and persist chunks + vector embeddings
-            KnowledgeService._generate_and_save_chunks(db, bot_id, source, chunks, metadata)
+            # OCR'd PDFs carry "Page N" markers in the text; keep them as the citation label
+            # so a reader can open the brochure at the right page.
+            # Any PDF carries "Page N" markers now, whether the text came from the text layer or
+            # from OCR, so the citation always names the page a reader can open.
+            chunk_pages = (
+                DocumentProcessor.page_labels(chunks)
+                if metadata.get("page_markers") or metadata.get("ocr")
+                else None
+            )
+            KnowledgeService._generate_and_save_chunks(
+                db, bot_id, source, chunks, metadata, chunk_pages
+            )
 
         except Exception as e:
             logger.error(f"Error processing file {filename}: {e}", exc_info=True)
@@ -257,6 +320,13 @@ class KnowledgeService:
         """
         KnowledgeService.verify_bot_ownership(db, bot_id, user_id)
 
+        # Validate before creating a source row: an internal URL should be rejected outright,
+        # not stored as a failed ingest attempt.
+        try:
+            assert_safe_url(website_in.url)
+        except UnsafeURLError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
         name = website_in.name or website_in.url
 
         source = KnowledgeSource(
@@ -271,8 +341,22 @@ class KnowledgeService:
         db.refresh(source)
 
         try:
-            extracted_text, metadata = DocumentProcessor.extract_from_website(website_in.url)
-            chunks = DocumentProcessor.chunk_text(extracted_text)
+            extracted_text, metadata = DocumentProcessor.crawl_website(
+                website_in.url, max_pages=getattr(website_in, "max_pages", 1) or 1
+            )
+
+            # Chunk page by page so every chunk keeps the URL it came from, even in a
+            # multi-page crawl. Page text itself stays out of the stored metadata.
+            pages = metadata.get("pages") or [{"url": website_in.url, "text": extracted_text}]
+            chunks: List[str] = []
+            chunk_pages: List[str] = []
+            for page in pages:
+                for chunk in DocumentProcessor.chunk_text(page.get("text", "")):
+                    chunks.append(chunk)
+                    chunk_pages.append(page.get("url") or website_in.url)
+            metadata["pages"] = [
+                {k: v for k, v in page.items() if k != "text"} for page in pages
+            ]
 
             if not website_in.name and metadata.get("page_title"):
                 source.name = metadata["page_title"]
@@ -280,7 +364,9 @@ class KnowledgeService:
             KnowledgeService._finalize_source(db, source, extracted_text, chunks, metadata)
 
             # Generate and persist chunks + vector embeddings
-            KnowledgeService._generate_and_save_chunks(db, bot_id, source, chunks, metadata)
+            KnowledgeService._generate_and_save_chunks(
+                db, bot_id, source, chunks, metadata, chunk_pages=chunk_pages
+            )
 
         except Exception as e:
             logger.error(f"Error scraping website {website_in.url}: {e}", exc_info=True)
@@ -303,47 +389,38 @@ class KnowledgeService:
         """
         KnowledgeService.verify_bot_ownership(db, bot_id, user_id)
 
-        # Detect platform from URL if not specified
-        url_lower = social_in.url.lower()
-        platform = social_in.platform or "Social Profile"
-        if "linkedin.com" in url_lower:
-            platform = "LinkedIn"
-        elif "twitter.com" in url_lower or "x.com" in url_lower:
-            platform = "X (Twitter)"
-        elif "instagram.com" in url_lower:
-            platform = "Instagram"
-        elif "facebook.com" in url_lower:
-            platform = "Facebook"
-        elif "youtube.com" in url_lower:
-            platform = "YouTube"
-        elif "github.com" in url_lower:
-            platform = "GitHub"
+        try:
+            assert_safe_url(social_in.url)
+        except UnsafeURLError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+        extracted_text, metadata = SocialService.ingest(
+            social_in.url,
+            platform=social_in.platform,
+            caption=getattr(social_in, "caption", None),
+            name=social_in.name,
+        )
+        platform = metadata.get("platform") or "Social Profile"
         display_name = social_in.name or f"{platform}: {social_in.url}"
 
-        metadata = {
-            "platform": platform,
-            "url": social_in.url,
-            "ready_for_crawling": True
-        }
-
-        extracted_text = f"Social Media Profile Link ({platform}): {social_in.url}"
+        chunks = DocumentProcessor.chunk_text(extracted_text) or [extracted_text]
+        chunk_pages = [f"Profile: {platform}"] * len(chunks)
 
         source = KnowledgeSource(
             bot_id=bot_id,
             source_type=KnowledgeSourceType.SOCIAL_LINK.value,
             name=display_name,
             source_url=social_in.url,
-            processing_status=ProcessingStatus.COMPLETED.value,
-            extracted_text=extracted_text,
-            chunks_count=1,
-            metadata_json=json.dumps(metadata),
+            processing_status=ProcessingStatus.PROCESSING.value,
         )
         db.add(source)
         db.commit()
         db.refresh(source)
 
-        KnowledgeService._generate_and_save_chunks(db, bot_id, source, [extracted_text], metadata)
+        KnowledgeService._finalize_source(db, source, extracted_text, chunks, metadata)
+        KnowledgeService._generate_and_save_chunks(
+            db, bot_id, source, chunks, metadata, chunk_pages=chunk_pages
+        )
         db.refresh(source)
         return source
 
@@ -444,6 +521,94 @@ class KnowledgeService:
         db.delete(source)
         db.commit()
         return {"message": "Knowledge source deleted successfully", "id": source_id}
+
+    # ── BRIM industry knowledge packs ─────────────────────────────────────────
+
+    @staticmethod
+    def get_industry_packs() -> List[dict]:
+        """The eight BRIM industries and the knowledge pack available for each."""
+        return BRIM_INDUSTRY_PACKS
+
+    @staticmethod
+    def _industry_pack_dir() -> Path:
+        """Locate demo_documents/brim from the working directory or the package root."""
+        local = Path("demo_documents") / "brim"
+        if local.is_dir():
+            return local
+        return Path(__file__).resolve().parent.parent.parent / "demo_documents" / "brim"
+
+    @staticmethod
+    def seed_industry_pack(db: Session, bot_id: int, industry_key: str, user_id: int) -> KnowledgeSource:
+        """
+        Attach the BRIM knowledge pack for one industry to a bot.
+
+        Re-seeding the same industry refreshes the existing source instead of adding a
+        duplicate, which keeps the knowledge list clean during demos.
+        """
+        KnowledgeService.verify_bot_ownership(db, bot_id, user_id)
+
+        pack = get_pack(industry_key)
+        if not pack:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Unknown industry pack '{industry_key}'.",
+            )
+
+        pack_path = KnowledgeService._industry_pack_dir() / pack["filename"]
+        if not pack_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=(
+                    f"Industry pack file '{pack['filename']}' is missing on the server. "
+                    "Run scripts/build_industry_packs.py to rebuild it."
+                ),
+            )
+        content = pack_path.read_text(encoding="utf-8").strip()
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Industry pack file is empty.",
+            )
+
+        # Replace a previous copy of the same pack for this bot.
+        for existing in (
+            db.query(KnowledgeSource)
+            .filter(
+                KnowledgeSource.bot_id == bot_id,
+                KnowledgeSource.source_type == KnowledgeSourceType.DOCUMENT.value,
+                KnowledgeSource.name == pack["name"],
+            )
+            .all()
+        ):
+            db.delete(existing)
+            db.commit()
+
+        metadata = {
+            "is_industry_pack": True,
+            "industry": pack["industry"],
+            "pack_key": pack["key"],
+            "source_url": pack["url"],
+            "character_count": len(content),
+        }
+
+        source = KnowledgeSource(
+            bot_id=bot_id,
+            source_type=KnowledgeSourceType.DOCUMENT.value,
+            name=pack["name"],
+            source_url=pack["url"],
+            original_filename=pack["filename"],
+            file_size=len(content.encode("utf-8")),
+            processing_status=ProcessingStatus.PROCESSING.value,
+        )
+        db.add(source)
+        db.commit()
+        db.refresh(source)
+
+        chunks = DocumentProcessor.chunk_text(content)
+        KnowledgeService._finalize_source(db, source, content, chunks, metadata)
+        KnowledgeService._generate_and_save_chunks(db, bot_id, source, chunks, metadata)
+        db.refresh(source)
+        return source
 
     SAMPLE_DOCS = {
         "real_estate": {

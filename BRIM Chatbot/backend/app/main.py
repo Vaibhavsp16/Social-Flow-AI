@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.constants import PREDEFINED_INDUSTRIES
+from app.core.rate_limit import RateLimitMiddleware
 from app.database.session import init_db
 from app.api.auth import router as auth_router
 from app.api.projects import router as projects_router
@@ -9,6 +10,10 @@ from app.api.bots import router as bots_router
 from app.api.knowledge import router as knowledge_router
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
+from app.api.properties import router as properties_router
+from app.api.context import router as context_router
+from app.api.analytics import router as analytics_router
+from app.api.admin import router as admin_router
 
 # Initialize database tables
 init_db()
@@ -23,6 +28,7 @@ app = FastAPI(
 # Setup CORS.
 # An explicit origin list is required: "Access-Control-Allow-Origin: *" is not valid together
 # with credentials, and the browser sends the JWT in the Authorization header.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins or ["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -59,4 +65,8 @@ app.include_router(bots_router, prefix=settings.API_V1_STR)
 app.include_router(knowledge_router, prefix=settings.API_V1_STR)
 app.include_router(chat_router, prefix=settings.API_V1_STR)
 app.include_router(conversations_router, prefix=settings.API_V1_STR)
+app.include_router(properties_router, prefix=settings.API_V1_STR)
+app.include_router(context_router, prefix=settings.API_V1_STR)
+app.include_router(analytics_router, prefix=settings.API_V1_STR)
+app.include_router(admin_router, prefix=settings.API_V1_STR)
 

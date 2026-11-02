@@ -21,6 +21,14 @@ class MessageResponse(BaseModel):
 class ConversationCreate(BaseModel):
     bot_id: int
     session_id: Optional[str] = None  # auto-generated if not provided
+    # Optional greeting context. City/region only — precise coordinates are never accepted.
+    language: Optional[str] = None
+    language_hint: Optional[str] = None  # navigator.language / Accept-Language
+    city: Optional[str] = None
+    region: Optional[str] = None
+    local_hour: Optional[int] = Field(default=None, ge=0, le=23)
+    utc_offset_minutes: Optional[int] = Field(default=None, ge=-720, le=840)
+    location_granted: bool = False
 
 
 class ConversationResponse(BaseModel):
@@ -54,6 +62,12 @@ class ConversationSummary(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
+    # Explicit language switch from the UI; omitted means "detect from the message".
+    language: Optional[str] = None
+
+
+class MessageContentUpdate(BaseModel):
+    content: str = Field(..., min_length=1, max_length=8000)
 
 
 class SendMessageResponse(BaseModel):
@@ -66,3 +80,10 @@ class SendMessageResponse(BaseModel):
     sources: List[Dict[str, Any]] = []
     confidence: float = 0.0
     is_handoff: bool = False
+    # Real-estate workflow output (null/empty for other industries).
+    stage: Optional[str] = None
+    properties: List[Dict[str, Any]] = []
+    lead: Optional[Dict[str, Any]] = None
+    # Grounded prompt for the optional browser-side Puter client (null when a server LLM is set).
+    llm_prompt: Optional[str] = None
+    language: Optional[str] = None

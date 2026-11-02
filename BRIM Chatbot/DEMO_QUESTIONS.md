@@ -109,3 +109,26 @@ These use vocabulary absent from the document, so retrieval found nothing:
 
 This is expected behaviour for lexical retrieval — it is the system correctly refusing rather than
 guessing. Adding OpenAI credits removes this limitation.
+# BRIM industry knowledge packs — verified demo prompts (17 Oct 2026)
+
+Each prompt below was run against the live pipeline (OpenAI embeddings + gpt-4o-mini) with only the
+matching industry pack attached to the bot. Seed a pack with
+`POST /api/bots/{id}/knowledge/seed-industry` or the "Index pack" control in the Knowledge tab.
+
+| Industry pack | Prompt | Verified result |
+|---|---|---|
+| Real Estate | What services does BRIM offer for real estate brands? | Grounded answer (brand strategy, naming, brochures, website, digital) + 4 citations, confidence 0.78 |
+| Jewellery | What services does BRIM offer for jewellery brands? | Grounded answer (branding, digital, print, content, web, offline) + 4 citations |
+| FMCG | What packaging services does BRIM offer for FMCG brands? | Grounded answer (packaging design, label design, visual identity) + 4 citations |
+| Any pack | What is the warranty policy on interstellar starships to Pluto? | Canonical refusal, **0 citations** — shows the bot never invents an answer |
+
+Refusal text is always:
+> I do not have enough information in my knowledge base to answer this question accurately. Please
+> contact our support team or reach out to a human advisor for further assistance.
+
+Website crawl demo: add `https://brim.co.in/industry/healthcare/` with "Pages to crawl" = 3.
+Verified result: "Crawled 3 pages and indexed 6 chunks", row shows "6 text chunks extracted ·
+3 pages crawled · COMPLETED", and the healthcare FAQ content becomes answerable.
+
+---
+

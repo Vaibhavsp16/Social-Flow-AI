@@ -8,6 +8,7 @@ import { Select } from '../components/Select';
 import { Card } from '../components/Card';
 import { StatCard } from '../components/StatCard';
 import { LoadingState } from '../components/LoadingState';
+import { BotMetrics } from '../components/BotMetrics';
 import { ErrorState } from '../components/ErrorState';
 import { PREDEFINED_INDUSTRIES } from '../constants/industries';
 import { KnowledgeManager } from '../components/KnowledgeManager';
@@ -180,7 +181,8 @@ export const BotOverview = () => {
       {/* OVERVIEW TAB */}
       {activeTab === 'overview' && (
         <div>
-          <div className="grid stats">
+          <BotMetrics botId={bot.id} compact />
+          <div className="grid stats" style={{ marginTop: '18px' }}>
             <StatCard
               label="Conversations"
               value={conversations === null ? '—' : conversations.length}
@@ -569,11 +571,12 @@ export const BotOverview = () => {
             </div>
           </div>
 
-          <Card style={{ textAlign: 'center', padding: '50px 20px', margin: '20px 0' }}>
-            <div style={{ fontSize: '32px', marginBottom: '12px' }}>📈</div>
-            <h3>Analytics will appear once your bot starts receiving conversations.</h3>
-            <p className="muted" style={{ maxWidth: '440px', margin: '8px auto 18px' }}>
-              When customers interact with your assistant, metrics like resolution rate, sentiment, and volume will populate in real time.
+          <BotMetrics botId={bot.id} />
+
+          <Card style={{ marginTop: '18px', textAlign: 'center', padding: '28px 20px' }}>
+            <h3 style={{ fontSize: '15px', marginBottom: '6px' }}>Want more data to work with?</h3>
+            <p className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
+              Open the bot and hold a few real conversations — metrics populate from those, never from samples.
             </p>
             <Button variant="primary" onClick={() => navigate(`/preview/${bot.id}`)}>
               Test Bot in Chat Preview

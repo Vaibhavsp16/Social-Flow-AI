@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { botService } from '../services/botService';
 import { chatService } from '../services/chatService';
+import { puterService } from '../services/puterService';
+import { contextService, LANGUAGE_OPTIONS } from '../services/contextService';
 import { Button } from '../components/Button';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -102,6 +104,69 @@ function MessageBubble({ msg }) {
           {msg.text}
         </div>
 
+        {/* Property shortlist (real-estate flow) */}
+        {msg.properties && msg.properties.length > 0 && (
+          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+            {msg.properties.map((property) => (
+              <div
+                key={property.property_id}
+                style={{
+                  background: '#fff', border: '1px solid #e7e4f3',
+                  borderLeft: '3px solid #6d4aff', borderRadius: '10px',
+                  padding: '10px 12px', minWidth: '260px',
+                  boxShadow: '0 2px 8px rgba(109,74,255,0.06)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ fontWeight: 700, fontSize: '13px', color: '#17152a' }}>
+                    {property.title}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '13px', color: '#6d4aff', whiteSpace: 'nowrap' }}>
+                    {property.price_display}
+                  </div>
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px' }}>
+                  {[
+                    property.bhk ? `${property.bhk} BHK` : null,
+                    property.property_type,
+                    property.location,
+                  ].filter(Boolean).join(' · ')}
+                </div>
+                {property.amenities?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                    {property.amenities.slice(0, 5).map((amenity) => (
+                      <span
+                        key={amenity}
+                        style={{
+                          fontSize: '10px', padding: '1px 7px', borderRadius: '999px',
+                          background: '#f5f3ff', color: '#6d4aff', border: '1px solid #e0d9ff',
+                        }}
+                      >
+                        {amenity}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                  <span style={{ fontSize: '9.5px', color: property.is_mock ? '#b45309' : '#059669', fontWeight: 600 }}>
+                    {property.is_mock ? 'DEVELOPMENT DATA' : property.status}
+                  </span>
+                  {property.brochure_url && (
+                    <a
+                      href={property.brochure_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: '11px', color: '#1d4ed8', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      Brochure ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Source citations */}
         {msg.sources && msg.sources.length > 0 && (
           <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
@@ -191,19 +256,34 @@ export const ChatInterface = () => {
   const [conversationState, setConversationState] = useState({});
   const [showHistory, setShowHistory] = useState(false);
   const [isHandedOff, setIsHandedOff] = useState(false);
+  // '' means "auto" — the server detects the language of each message.
+  const [language, setLanguage] = useState(() => contextService.getPreferredLanguage());
 
   // Quick-action suggestions by intent
+  // Industry-neutral starters: the same bot builder serves all eight BRIM industries.
   const quickActions = {
-    browsing: ['Tell me about your properties', 'Show me available options', 'What areas do you cover?'],
-    buying: ['What is the price?', 'Is it ready to move in?', 'What are the payment plans?'],
-    renting: ['What is the monthly rent?', 'Is it furnished?', 'How long is the lease?'],
+    browsing: ['What services do you offer?', 'Tell me about your business', 'How can I get in touch?'],
+    buying: ['What are your pricing options?', 'How do I get started?', 'Do you offer support?'],
+    renting: ['What packages are available?', 'Is there a free trial?', 'How long does onboarding take?'],
     general_question: ['I have a question', 'Tell me more', 'Can you explain?'],
     human_assistance: [],
   };
 
   const formatTime = (dt) => {
     if (!dt) return '';
-    return new Date(dt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    // Live messages pass a Date (already local). Stored timestamps arrive as a UTC string with
+    // no zone suffix, which the browser would read as local time, so a bare timestamp is
+    // treated as UTC.
+    let parsed;
+    if (dt instanceof Date) {
+      parsed = dt;
+    } else {
+      const raw = String(dt);
+      const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw);
+      parsed = new Date(hasZone ? raw : `${raw}Z`);
+    }
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   };
 
   // ── Load bot info ──────────────────────────────────────────────────────────
@@ -220,13 +300,22 @@ export const ChatInterface = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const convo = await chatService.createConversation(botId);
+      // Location permission is optional: getContext resolves with time/language only when it
+      // is denied or unavailable, so the chat always opens.
+      const context = await contextService.getContext();
+      const convo = await chatService.createConversation(botId, null, context);
       setConversation(convo);
+
+      // The server stores a contextual greeting (time, language, optional weather/holiday) as
+      // the first assistant message; fall back to the bot's welcome text if it is absent.
+      const greeting = (convo.messages || []).find((m) => m.sender === 'ASSISTANT');
       setMessages([{
-        id: 'welcome',
+        id: greeting?.id || 'welcome',
         sender: 'bot',
-        text: bot?.welcome_message || `Hi there! 👋 I'm ${bot?.name || 'your AI assistant'}. How can I help you today?`,
-        time: formatTime(new Date()),
+        text: greeting?.content
+          || bot?.welcome_message
+          || `Hi there! 👋 I'm ${bot?.name || 'your AI assistant'}. How can I help you today?`,
+        time: formatTime(greeting?.timestamp || new Date()),
         sources: [],
       }]);
       setIntent('browsing');
@@ -253,6 +342,7 @@ export const ChatInterface = () => {
         text: m.content,
         time: formatTime(m.timestamp),
         sources: (() => { try { return JSON.parse(m.metadata_json || '{}').sources || []; } catch { return []; } })(),
+        properties: (() => { try { return JSON.parse(m.metadata_json || '{}').properties || []; } catch { return []; } })(),
         isHandoff: (() => { try { return JSON.parse(m.metadata_json || '{}').is_handoff || false; } catch { return false; } })(),
       }));
 
@@ -334,7 +424,22 @@ export const ChatInterface = () => {
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      const result = await chatService.sendConversationMessage(conversation.id, messageText);
+      const result = await chatService.sendConversationMessage(
+        conversation.id,
+        messageText,
+        language || null
+      );
+
+      // Optional: let Puter rephrase a grounded answer in the browser. The server answer is
+      // already saved, so any failure here simply keeps it.
+      let replyText = result.reply;
+      if (puterService.enabled && result.llm_prompt) {
+        const polished = await puterService.complete(result.llm_prompt);
+        if (polished) {
+          replyText = polished;
+          chatService.updateMessage(result.message_id, polished).catch(() => {});
+        }
+      }
 
       setIntent(result.intent || 'browsing');
       setConversationState(result.conversation_state || {});
@@ -343,9 +448,10 @@ export const ChatInterface = () => {
       setMessages(prev => [...prev, {
         id: result.message_id,
         sender: 'bot',
-        text: result.reply,
+        text: replyText,
         time: formatTime(new Date()),
         sources: result.sources || [],
+        properties: result.properties || [],
         confidence: result.confidence,
         isHandoff: result.is_handoff,
       }]);
@@ -486,9 +592,9 @@ export const ChatInterface = () => {
 
           {/* Chat Header */}
           <div style={{
-            padding: '12px 20px', background: '#fff',
+            padding: '12px 14px', background: '#fff',
             borderBottom: '1px solid #e7e4f3',
-            display: 'flex', alignItems: 'center', gap: '12px',
+            display: 'flex', alignItems: 'center', gap: '8px',
           }}>
             <button
               onClick={() => navigate(`/bots/${botId}`)}
@@ -505,8 +611,11 @@ export const ChatInterface = () => {
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px',
             }}>🤖</div>
 
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: '15px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontWeight: 700, fontSize: '15px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
                 {bot?.name || 'AI Assistant'}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
@@ -515,6 +624,26 @@ export const ChatInterface = () => {
                 <IntentBadge intent={intent} />
               </div>
             </div>
+
+            <select
+              value={language}
+              onChange={(event) => {
+                const code = event.target.value;
+                setLanguage(code);
+                contextService.setPreferredLanguage(code);
+              }}
+              title="Reply language"
+              style={{
+                border: '1px solid #e7e4f3', borderRadius: '8px', background: '#fff',
+                color: '#4b5563', fontSize: '12px', padding: '5px 8px', cursor: 'pointer',
+              }}
+            >
+              {LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.code || 'auto'} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
             <button
               onClick={() => { setShowHistory(true); loadHistory(); }}
@@ -550,7 +679,16 @@ export const ChatInterface = () => {
               </div>
             ) : (
               messages.map((msg, idx) => (
-                <MessageBubble key={msg.id || idx} msg={msg} />
+                // The welcome bubble is created before the bot record arrives, so resolve its
+                // text at render time instead of racing the fetch.
+                <MessageBubble
+                  key={msg.id || idx}
+                  msg={
+                    msg.id === 'welcome' && bot?.welcome_message
+                      ? { ...msg, text: bot.welcome_message }
+                      : msg
+                  }
+                />
               ))
             )}
             {isSending && <TypingIndicator />}

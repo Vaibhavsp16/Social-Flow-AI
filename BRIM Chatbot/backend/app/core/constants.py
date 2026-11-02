@@ -1,22 +1,18 @@
 from enum import Enum
 
+# The eight industries BRIM serves (https://brim.co.in/industry/), in site order. Each one has a
+# matching knowledge pack in app/core/industry_packs.py, so the selected industry can seed the
+# bot with agency content out of the box. "Other" stays last as an escape hatch.
 PREDEFINED_INDUSTRIES = [
     "Real Estate",
-    "E-commerce",
-    "Healthcare",
+    "FMCG",
+    "Jewellery",
     "Education",
-    "Finance & Banking",
-    "Travel & Hospitality",
-    "Legal Services",
-    "Technology & SaaS",
-    "Manufacturing",
-    "Automotive",
-    "Marketing & Advertising",
-    "Logistics & Supply Chain",
-    "Food & Restaurant",
-    "Fitness & Wellness",
-    "Professional Services",
-    "Other"
+    "Healthcare",
+    "Food & Hospitality",
+    "Engineering & Manufacturing",
+    "Fashion",
+    "Other",
 ]
 
 class UserRole(str, Enum):
@@ -37,7 +33,7 @@ class ProcessingStatus(str, Enum):
     FAILED = "FAILED"
 
 # File upload restrictions
-ALLOWED_DOCUMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt"}
+ALLOWED_DOCUMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".dxf", ".dwg"}
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 ALLOWED_FILE_EXTENSIONS = ALLOWED_DOCUMENT_EXTENSIONS.union(ALLOWED_IMAGE_EXTENSIONS)
 

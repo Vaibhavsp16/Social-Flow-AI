@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PREDEFINED_INDUSTRIES } from '../constants/industries';
 import { projectService } from '../services/projectService';
@@ -21,22 +21,22 @@ export const CreateBot = () => {
 
   // Form State
   const [formData, setFormData] = useState({
-    // Step 1: Basic Info
-    name: 'Prycoons Property Assistant',
+    // Step 1: Basic Info — neutral defaults, tailored to the industry when one is chosen.
+    name: 'BRIM Industry Assistant',
     industry: 'Real Estate',
-    description: 'AI assistant for property discovery and customer enquiries.',
-    companyName: 'Prycoons Real Estate',
+    description: 'AI assistant that answers questions about our real estate services.',
+    companyName: 'BRIM',
     primaryUseCase: 'Customer Support',
 
     // Step 2: Knowledge Sources
-    sampleDocKey: 'real_estate', // 'real_estate' | 'healthcare' | 'saas' | 'none'
+    industryPackKey: 'real-estate', // one of the eight BRIM industry pack keys, or 'none'
     websiteUrl: '',
-    instructions: 'Be polite, helpful, and answer property-related questions accurately based on the provided documents.',
+    instructions: 'Be polite, helpful, and answer questions accurately based only on the provided documents.',
 
     // Step 3: Bot Settings
     personality: 'Friendly & professional',
     language: 'English',
-    welcomeMessage: 'Hi! How can I help you today with properties and real estate?',
+    welcomeMessage: 'Hi! How can I help you today?',
     leadCollection: 'When relevant',
     humanHandoff: 'Allow when needed',
     responseStyle: 'Simple & clear',
@@ -44,6 +44,39 @@ export const CreateBot = () => {
 
   const [uploadedFile, setUploadedFile] = useState(null);
   const [errors, setErrors] = useState({});
+
+  // The eight BRIM industries and their knowledge packs come from the backend so the picker and
+  // the seeder can never drift apart.
+  const [industryPacks, setIndustryPacks] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    knowledgeService
+      .getIndustryPacks()
+      .then((packs) => {
+        if (!cancelled) setIndustryPacks(packs || []);
+      })
+      .catch((err) => console.warn('Could not load industry packs:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Keep the knowledge pack in step with the chosen industry.
+  const handleIndustryChange = (industry) => {
+    const match = industryPacks.find((pack) => pack.industry === industry);
+    setFormData((prev) => ({
+      ...prev,
+      industry,
+      industryPackKey: match ? match.key : 'none',
+      // Rewrite the copy that names the industry so a Jewellery bot never keeps real-estate text.
+      // Uses the display label verbatim to keep proper nouns like "FMCG" capitalised.
+      description: `AI assistant that answers questions about our ${industry} services.`,
+      welcomeMessage: `Hi! How can I help you today with ${industry}?`,
+    }));
+  };
+
+  const selectedPack = industryPacks.find((pack) => pack.key === formData.industryPackKey);
 
   const validateStep1 = () => {
     const errs = {};
@@ -89,13 +122,13 @@ export const CreateBot = () => {
       // 3. Attach knowledge sources selected in Step 2
       let attachedKnowledgeCount = 0;
 
-      // 3a. Seed sample document if chosen
-      if (formData.sampleDocKey && formData.sampleDocKey !== 'none') {
+      // 3a. Index the BRIM knowledge pack for the chosen industry
+      if (formData.industryPackKey && formData.industryPackKey !== 'none') {
         try {
-          await knowledgeService.seedSampleDocument(bot.id, formData.sampleDocKey);
+          await knowledgeService.seedIndustryPack(bot.id, formData.industryPackKey);
           attachedKnowledgeCount++;
         } catch (seedErr) {
-          console.warn('Could not seed sample doc:', seedErr);
+          console.warn('Could not seed industry pack:', seedErr);
         }
       }
 
@@ -249,7 +282,7 @@ export const CreateBot = () => {
               options={PREDEFINED_INDUSTRIES}
               value={formData.industry}
               error={errors.industry}
-              onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+              onChange={(e) => handleIndustryChange(e.target.value)}
             />
 
             <div className="field span2">
@@ -291,40 +324,57 @@ export const CreateBot = () => {
               💡 <b>Knowledge Base Setup:</b> Choose a pre-packaged industry knowledge guide for immediate demo testing, or upload your own business document.
             </div>
 
-            {/* Quick Demo Document Picker */}
+            {/* BRIM industry knowledge packs */}
             <div style={{ marginBottom: '20px', padding: '16px', background: '#fafbff', border: '1px solid var(--line)', borderRadius: '10px' }}>
               <b style={{ fontSize: '14.5px', color: 'var(--brand)', display: 'block', marginBottom: '4px' }}>
-                ⚡ Pre-Packaged Demo Knowledge Guides (Recommended for Demo)
+                ⚡ BRIM industry knowledge (brim.co.in/industry)
               </b>
               <p className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
-                Select a sample document to automatically seed into the bot's RAG knowledge base upon creation.
+                The pack matching the selected industry is indexed into the bot automatically, so it can
+                answer questions about BRIM's services from the first message.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-                {[
-                  { key: 'real_estate', title: '🏢 Real Estate Guide', desc: 'Prycoons Projects, Sunset Palms, 3/4 BHK' },
-                  { key: 'healthcare', title: '🏥 Healthcare Guide', desc: 'Apex Medical, Dr. Rao, Cardiology, OPD' },
-                  { key: 'saas', title: '☁️ SaaS Platform Docs', desc: 'CloudScale AI, Starter $49, Pro $199' },
-                  { key: 'none', title: '🚫 None / Empty', desc: 'Start with blank knowledge base' },
-                ].map((item) => (
-                  <div
-                    key={item.key}
-                    onClick={() => setFormData({ ...formData, sampleDocKey: item.key })}
-                    style={{
-                      padding: '12px',
-                      borderRadius: '8px',
-                      border: formData.sampleDocKey === item.key ? '2px solid var(--brand)' : '1px solid var(--line)',
-                      background: formData.sampleDocKey === item.key ? '#eff6ff' : '#fff',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <b style={{ fontSize: '13.5px', display: 'block', color: formData.sampleDocKey === item.key ? 'var(--brand)' : '#111827' }}>
-                      {item.title}
-                    </b>
-                    <span className="muted" style={{ fontSize: '12px' }}>{item.desc}</span>
-                  </div>
-                ))}
+                {industryPacks.map((pack) => {
+                  const selected = formData.industryPackKey === pack.key;
+                  return (
+                    <div
+                      key={pack.key}
+                      onClick={() => setFormData({ ...formData, industryPackKey: pack.key })}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: selected ? '2px solid var(--brand)' : '1px solid var(--line)',
+                        background: selected ? '#eff6ff' : '#fff',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <b style={{ fontSize: '13.5px', display: 'block', color: selected ? 'var(--brand)' : '#111827' }}>
+                        {pack.industry}
+                      </b>
+                      <span className="muted" style={{ fontSize: '12px' }}>{pack.name}</span>
+                    </div>
+                  );
+                })}
+                <div
+                  onClick={() => setFormData({ ...formData, industryPackKey: 'none' })}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: formData.industryPackKey === 'none' ? '2px solid var(--brand)' : '1px solid var(--line)',
+                    background: formData.industryPackKey === 'none' ? '#eff6ff' : '#fff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <b style={{ fontSize: '13.5px', display: 'block' }}>No pack</b>
+                  <span className="muted" style={{ fontSize: '12px' }}>Start with a blank knowledge base</span>
+                </div>
               </div>
+              {industryPacks.length === 0 && (
+                <p className="muted" style={{ fontSize: '12px', marginTop: '10px' }}>
+                  Loading available packs…
+                </p>
+              )}
             </div>
 
             <div className="grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
@@ -471,6 +521,10 @@ export const CreateBot = () => {
               </p>
               <p>
                 <b>Welcome Message:</b> "{formData.welcomeMessage}"
+              </p>
+              <p>
+                <b>Knowledge pack:</b>{' '}
+                {selectedPack ? selectedPack.name : 'None — empty knowledge base'}
               </p>
               <p>
                 <b>Lead Capture:</b> {formData.leadCollection}

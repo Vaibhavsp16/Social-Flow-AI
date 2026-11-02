@@ -1082,3 +1082,57 @@ a:hover {
     font-size: 24px;
   }
 }
+
+/* ── Production hardening: narrow viewports ───────────────────────────────────
+   Detail pages (bot overview, analytics) contain wide tables and metric grids.
+   They must scroll inside their card rather than stretching the document, which
+   is what caused horizontal overflow at 768px and 375px. */
+.card,
+.grid > *,
+.page > * {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .card {
+    overflow-x: auto;
+  }
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 700px) {
+  /* The detail page must never widen the document. Tables lose their 680px floor and
+     wrap instead, and the shell clips any residual single-pixel overshoot. */
+  .main {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  .main > * {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .table {
+    min-width: 0;
+    width: 100%;
+  }
+  .table th,
+  .table td {
+    white-space: normal;
+    word-break: break-word;
+  }
+  .tabs {
+    max-width: 100%;
+  }
+}

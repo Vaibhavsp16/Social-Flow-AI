@@ -30,3 +30,12 @@ def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Admin-only dependency. Business accounts get 403, not a filtered view."""
+    if (current_user.role or "").upper() != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required.",
+        )
+    return current_user

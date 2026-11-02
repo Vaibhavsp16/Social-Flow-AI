@@ -6,6 +6,8 @@ from app.schemas.token import Token
 from app.services.auth_service import AuthService
 from app.models.user import User
 from app.api.deps import get_current_user
+from app.models.activity import ActivityType
+from app.services.activity_service import log_activity
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -19,6 +21,11 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
         db=db,
         user_in=UserLogin(email=user_in.email, password=user_in.password)
     )
+    log_activity(
+        db, ActivityType.USER_SIGNUP.value,
+        user_id=user.id, entity_type="user", entity_id=user.id,
+    )
+    db.commit()
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -31,6 +38,11 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
     Authenticate a user with email and password and return an access token.
     """
     user, token = AuthService.authenticate_user(db=db, user_in=user_in)
+    log_activity(
+        db, ActivityType.USER_LOGIN.value,
+        user_id=user.id, entity_type="user", entity_id=user.id,
+    )
+    db.commit()
     return {
         "access_token": token,
         "token_type": "bearer",

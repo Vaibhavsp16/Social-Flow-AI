@@ -6,6 +6,7 @@ from app.models.bot import Bot
 from app.models.project import Project
 from app.schemas.chat import ChatQueryRequest, ChatQueryResponse
 from app.api.auth import get_current_user
+from app.core.messages import is_refusal
 from app.services.retrieval_service import RetrievalService
 from app.services.llm_service import LLMService
 
@@ -40,7 +41,7 @@ def bot_chat_authenticated(
         bot_id=bot.id,
         query=request.message,
         top_k=request.top_k or 4,
-        threshold=request.threshold if request.threshold is not None else 0.02,
+        threshold=request.threshold,
     )
 
     # 2. Generate grounded answer
@@ -52,7 +53,8 @@ def bot_chat_authenticated(
     )
 
     # 3. Format source citations
-    if "I do not have" in reply or not retrieved_chunks:
+    reply = LLMService.normalise_refusal(LLMService.strip_markdown(reply))
+    if is_refusal(reply) or not retrieved_chunks:
         citations = []
     else:
         citations = RetrievalService.format_citations(retrieved_chunks)
@@ -87,7 +89,7 @@ def bot_chat_public(
         bot_id=bot.id,
         query=request.message,
         top_k=request.top_k or 4,
-        threshold=request.threshold if request.threshold is not None else 0.02,
+        threshold=request.threshold,
     )
 
     # 2. Generate grounded answer
@@ -99,7 +101,8 @@ def bot_chat_public(
     )
 
     # 3. Format source citations
-    if "I do not have" in reply or not retrieved_chunks:
+    reply = LLMService.normalise_refusal(LLMService.strip_markdown(reply))
+    if is_refusal(reply) or not retrieved_chunks:
         citations = []
     else:
         citations = RetrievalService.format_citations(retrieved_chunks)

@@ -30,9 +30,19 @@ class ProjectUpdate(BaseModel):
             raise ValueError(f"Industry must be one of: {', '.join(PREDEFINED_INDUSTRIES)}")
         return v
 
-class ProjectResponse(ProjectBase):
+class ProjectResponse(BaseModel):
+    """
+    Read model, deliberately not reusing the write validator.
+
+    Projects created before the industry list changed still carry their original value. A
+    response validator would turn those rows into 500s for the whole project list; the UI is
+    responsible for displaying a stored value that is no longer offered in the dropdown.
+    """
     id: int
     user_id: int
+    name: str
+    industry: str
+    description: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

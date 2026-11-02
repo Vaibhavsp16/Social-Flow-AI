@@ -293,10 +293,25 @@ def test_07_conversation_persistence_and_rag():
     hist = client.get(f"/api/conversations/{convo_id}", headers=headers)
     assert hist.status_code == 200
     messages = hist.json()["messages"]
-    assert len(messages) == 2, f"expected 2 persisted messages, got {len(messages)}"
-    assert messages[0]["sender"] == "USER"
-    assert messages[1]["sender"] == "ASSISTANT"
-    assert messages[1]["content"] == payload["reply"]
+
+    # A contextual greeting is stored when the conversation is created; the turn itself is the
+    # user message plus the assistant reply.
+    def _kind(message):
+        try:
+            import json as _json
+
+            return _json.loads(message.get("metadata_json") or "{}").get("type")
+        except (ValueError, TypeError):
+            return None
+
+    greeting_messages = [m for m in messages if _kind(m) == "greeting"]
+    assert len(greeting_messages) <= 1
+
+    turn = [m for m in messages if _kind(m) != "greeting"]
+    assert len(turn) == 2, f"expected 2 persisted messages, got {len(turn)}"
+    assert turn[0]["sender"] == "USER"
+    assert turn[1]["sender"] == "ASSISTANT"
+    assert turn[1]["content"] == payload["reply"]
 
     # The lightweight listing endpoint also works (used by the chat history sidebar)
     listing = client.get(f"/api/bots/{bot['id']}/conversations", headers=headers)

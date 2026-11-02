@@ -102,7 +102,7 @@ def healthcare_bot(test_user):
 def empty_bot(test_user):
     proj_res = client.post("/api/projects", json={
         "name": f"Empty Knowledge Project {uuid.uuid4().hex[:4]}",
-        "industry": "E-commerce"
+        "industry": "Fashion"
     }, headers=test_user)
     proj_id = proj_res.json()["id"]
 

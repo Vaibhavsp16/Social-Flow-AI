@@ -6,6 +6,8 @@ from app.schemas.bot import BotCreate, BotUpdate, BotResponse
 from app.services.bot_service import BotService
 from app.models.user import User
 from app.api.deps import get_current_user
+from app.models.activity import ActivityType
+from app.services.activity_service import log_activity
 
 router = APIRouter(prefix="/bots", tags=["Bots"])
 
@@ -18,7 +20,19 @@ def create_bot(
     """
     Create a new bot under an owned project.
     """
-    return BotService.create_bot(db=db, bot_in=bot_in, user_id=current_user.id)
+    bot = BotService.create_bot(db=db, bot_in=bot_in, user_id=current_user.id)
+    log_activity(
+        db, ActivityType.BOT_CREATED.value,
+        user_id=current_user.id, entity_type="bot", entity_id=bot.id,
+        metadata={"name": bot.name},
+    )
+    if (bot.status or "").lower() == "live":
+        log_activity(
+            db, ActivityType.BOT_PUBLISHED.value,
+            user_id=current_user.id, entity_type="bot", entity_id=bot.id,
+        )
+    db.commit()
+    return bot
 
 @router.get("", response_model=List[BotResponse])
 def get_user_bots(
@@ -52,9 +66,16 @@ def update_bot(
     """
     Update bot details.
     """
-    return BotService.update_bot(
+    bot = BotService.update_bot(
         db=db, bot_id=bot_id, bot_in=bot_in, user_id=current_user.id
     )
+    if (getattr(bot_in, "status", None) or "").lower() == "live":
+        log_activity(
+            db, ActivityType.BOT_PUBLISHED.value,
+            user_id=current_user.id, entity_type="bot", entity_id=bot.id,
+        )
+        db.commit()
+    return bot
 
 @router.delete("/{bot_id}")
 def delete_bot(

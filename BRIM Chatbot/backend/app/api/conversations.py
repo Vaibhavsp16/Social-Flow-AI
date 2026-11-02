@@ -10,6 +10,7 @@ from app.schemas.conversation import (
     ConversationCreate,
     ConversationResponse,
     ConversationSummary,
+    MessageContentUpdate,
     SendMessageRequest,
     SendMessageResponse,
 )
@@ -31,6 +32,7 @@ def create_conversation(
         db=db,
         bot_id=payload.bot_id,
         session_id=payload.session_id,
+        context=payload,
         user_id=current_user.id,
     )
     return convo
@@ -131,6 +133,7 @@ def send_message(
         conversation_id=conversation_id,
         user_message=payload.message,
         user_id=current_user.id,
+        language=payload.language,
     )
     return SendMessageResponse(**result)
 
@@ -147,8 +150,77 @@ def send_public_message(
         db=db,
         conversation_id=conversation_id,
         user_message=payload.message,
+        language=payload.language,
     )
     return SendMessageResponse(**result)
+
+
+# ── Replace an assistant message (browser-side Puter answer) ──────────────────
+@router.patch("/messages/{message_id}")
+def update_message_content(
+    message_id: int,
+    payload: MessageContentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Persist an assistant reply produced elsewhere (the optional Puter client) so the transcript
+    shows what the visitor actually saw.
+    """
+    from app.models.bot import Bot
+    from app.models.project import Project
+
+    message = db.query(Message).filter(Message.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found.")
+    convo = db.query(Conversation).filter(Conversation.id == message.conversation_id).first()
+    owned = (
+        db.query(Bot)
+        .join(Project, Bot.project_id == Project.id)
+        .filter(Bot.id == convo.bot_id, Project.user_id == current_user.id)
+        .first()
+        if convo
+        else None
+    )
+    if not owned:
+        raise HTTPException(status_code=403, detail="Access denied.")
+
+    message.content = payload.content
+    db.commit()
+    db.refresh(message)
+    return {"id": message.id, "content": message.content}
+
+
+# ── Request a human advisor ───────────────────────────────────────────────────
+@router.post("/conversations/{conversation_id}/handoff", response_model=ConversationResponse)
+def request_handoff(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Flag the conversation for a human advisor and leave an audit message in the transcript."""
+    from app.models.conversation import ConversationStatus, MessageSender
+
+    convo = ConversationService.get_conversation(db, conversation_id, current_user.id)
+    convo.status = ConversationStatus.HANDOFF_REQUESTED.value
+    db.add(
+        Message(
+            conversation_id=convo.id,
+            sender=MessageSender.SYSTEM.value,
+            content="A human advisor was requested from the chat.",
+            metadata_json=json.dumps({"event": "handoff_requested"}),
+        )
+    )
+    from app.models.activity import ActivityType
+    from app.services.activity_service import log_activity
+
+    log_activity(
+        db, ActivityType.HANDOFF_REQUESTED.value,
+        user_id=current_user.id, entity_type="conversation", entity_id=convo.id,
+    )
+    db.commit()
+    db.refresh(convo)
+    return convo
 
 
 # ── End a conversation ────────────────────────────────────────────────────────

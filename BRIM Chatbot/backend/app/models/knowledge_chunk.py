@@ -15,7 +15,9 @@ class KnowledgeChunk(Base):
     source_type = Column(String(50), nullable=False)
     source_name = Column(String(255), nullable=False)
     source_url = Column(String(1000), nullable=True)
-    page_number = Column(String(50), nullable=True)
+    # Holds either "Section 3" for documents or the full page URL for crawled sites. URLs exceed
+    # the original 50-character limit, which made multi-page ingestion fail on insert.
+    page_number = Column(String(500), nullable=True)
     metadata_json = Column(Text, default="{}", nullable=False)
     embedding_json = Column(Text, nullable=True)  # JSON-serialized embedding vector (1536 dim)
     embedding_vector = Column(Vector(1536), nullable=True)  # Native pgvector 1536-dim vector

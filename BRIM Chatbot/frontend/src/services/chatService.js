@@ -19,10 +19,11 @@ export const chatService = {
   },
 
   // ── Conversation session management ───────────────────────────────────────
-  createConversation: async (botId, sessionId = null) => {
+  createConversation: async (botId, sessionId = null, context = {}) => {
     const response = await api.post('/conversations', {
       bot_id: botId,
       session_id: sessionId,
+      ...context,
     });
     return response.data;
   },
@@ -57,10 +58,16 @@ export const chatService = {
   },
 
   // ── Send message in a conversation ────────────────────────────────────────
-  sendConversationMessage: async (conversationId, message) => {
-    const response = await api.post(`/conversations/${conversationId}/messages`, {
-      message,
-    });
+  sendConversationMessage: async (conversationId, message, language = null) => {
+    const payload = { message };
+    if (language) payload.language = language;
+    const response = await api.post(`/conversations/${conversationId}/messages`, payload);
+    return response.data;
+  },
+
+  // Persist a reply produced by the optional browser-side Puter client.
+  updateMessage: async (messageId, content) => {
+    const response = await api.patch(`/messages/${messageId}`, { content });
     return response.data;
   },
 

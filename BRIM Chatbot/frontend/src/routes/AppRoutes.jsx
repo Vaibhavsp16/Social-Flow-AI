@@ -16,6 +16,7 @@ import { Analytics } from '../pages/Analytics';
 import { Pricing } from '../pages/Pricing';
 import { ChatPreview } from '../pages/ChatPreview';
 import { ChatInterface } from '../pages/ChatInterface';
+import { Admin } from '../pages/Admin';
 
 export const AppRoutes = () => {
   return (
@@ -42,6 +43,7 @@ export const AppRoutes = () => {
           <Route path="/bots/:id" element={<BotOverview />} />
           <Route path="/history" element={<ChatHistory />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/pricing" element={<Pricing />} />
         </Route>
       </Route>
