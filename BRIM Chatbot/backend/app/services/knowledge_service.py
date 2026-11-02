@@ -222,16 +222,16 @@ class KnowledgeService:
 
         # Re-uploading the same file used to add a second identical source, which then produced
         # the same passage twice in retrieval and doubled every citation. Replace it instead.
-        duplicate = (
+        duplicates = (
             db.query(KnowledgeSource)
             .filter(
                 KnowledgeSource.bot_id == bot_id,
                 KnowledgeSource.original_filename == filename,
                 KnowledgeSource.file_size == file_size,
             )
-            .first()
+            .all()
         )
-        if duplicate is not None:
+        for duplicate in duplicates:
             db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.knowledge_source_id == duplicate.id
             ).delete()
@@ -405,6 +405,23 @@ class KnowledgeService:
 
         chunks = DocumentProcessor.chunk_text(extracted_text) or [extracted_text]
         chunk_pages = [f"Profile: {platform}"] * len(chunks)
+
+        # Re-adding a link (for example after correcting the caption) replaces the old entry
+        # rather than leaving two profiles that answer the same question differently.
+        for duplicate in (
+            db.query(KnowledgeSource)
+            .filter(
+                KnowledgeSource.bot_id == bot_id,
+                KnowledgeSource.source_type == KnowledgeSourceType.SOCIAL_LINK.value,
+                KnowledgeSource.source_url == social_in.url,
+            )
+            .all()
+        ):
+            db.query(KnowledgeChunk).filter(
+                KnowledgeChunk.knowledge_source_id == duplicate.id
+            ).delete()
+            db.delete(duplicate)
+            db.commit()
 
         source = KnowledgeSource(
             bot_id=bot_id,

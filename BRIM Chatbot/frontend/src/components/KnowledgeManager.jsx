@@ -677,7 +677,7 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                           background: '#fff',
                         }}
                       >
-                        <div>
+                        <div style={{ minWidth: 0 }}>
                           <b style={{ fontSize: '14px', display: 'block' }}>{item.name}</b>
                           <a
                             href={item.source_url}
@@ -688,12 +688,31 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                           >
                             {item.source_url}
                           </a>
+                          {item.extracted_text && (
+                            <p
+                              className="muted"
+                              style={{
+                                fontSize: '12px',
+                                margin: '6px 0 0',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {item.extracted_text}
+                            </p>
+                          )}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span className="status">
                             <span className="dot"></span>
-                            Tracked
+                            {item.processing_status === 'COMPLETED'
+                              ? `Indexed · ${item.chunks_count || 0} chunk${
+                                  item.chunks_count === 1 ? '' : 's'
+                                }`
+                              : item.processing_status || 'Tracked'}
                           </span>
                           <button
                             className="btn danger-btn"

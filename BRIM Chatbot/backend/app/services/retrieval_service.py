@@ -367,11 +367,27 @@ class RetrievalService:
     def display_citations(
         cls, scored_chunks: List[Tuple[KnowledgeChunk, float]]
     ) -> List[Tuple[KnowledgeChunk, float]]:
+        """
+        One citation per document, strongest passage first.
+
+        Two passages from the same brochure are two chips with the same name at different
+        percentages, which reads as a duplication bug rather than as two sources. The reader
+        wants to know which document the answer came from and where in it, so the best-scoring
+        passage of each source represents that source.
+        """
         if not scored_chunks:
             return []
+
         strong = [(chunk, score) for chunk, score in scored_chunks if score >= cls.MIN_DISPLAY_SCORE]
-        # Never show nothing when an answer was produced from something.
-        return (strong or scored_chunks[:1])[: cls.MAX_DISPLAY_CITATIONS]
+        candidates = strong or scored_chunks[:1]
+
+        best_per_source: Dict[int, Tuple[KnowledgeChunk, float]] = {}
+        for chunk, score in candidates:  # already ordered best-first
+            key = chunk.knowledge_source_id or chunk.id
+            if key not in best_per_source:
+                best_per_source[key] = (chunk, score)
+
+        return list(best_per_source.values())[: cls.MAX_DISPLAY_CITATIONS]
 
     @staticmethod
     def format_citations(scored_chunks: List[Tuple[KnowledgeChunk, float]]) -> List[SourceCitation]:

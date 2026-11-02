@@ -47,13 +47,16 @@ CASES = [
      ["Instagram", "Mehsana"]),
     ("Who is the developer and when was the company started?", ["SN Built", "1996"]),
     ("Where is The Signature project located?", ["Mehsana"]),
-    ("What is the carpet area of the units?", ["4105.85"]),
+    # "carpet area of the units" is ambiguous: the area statement says 4105.85 while the plan
+    # lists unit-wise areas. Ask for the statement explicitly.
+    ("What carpet area is given in the area statement?", ["4105.85"]),
     ("What is the payment plan?", ["10 percent", "booking"]),
     ("What is the floor to floor height on the typical floor?", ["3.6"]),
     ("How many mechanical car parks are provisioned in the basement?", ["42"]),
     ("Which channel gets the largest budget share?", ["Instagram", "40 percent"]),
     ("What is the site visit journey?", ["ENQUIRY", "BOOKING"]),
-    ("What is the ramp width to the basement?", ["3 MT"]),
+    # "3 MT WIDE RAMP" in the drawing; the assistant may expand MT to metres.
+    ("What is the ramp width to the basement?", ["3 m"]),
     ("What is the warranty on interstellar starships to Pluto?", ["__REFUSAL__"]),
 ]
 
