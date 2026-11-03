@@ -209,7 +209,16 @@ export const BotOverview = () => {
               </p>
               <div style={{ display: 'grid', gap: '10px', fontSize: '13.5px' }}>
                 <p>
-                  <b>Welcome Message:</b> "{bot.welcome_message}"
+                  {/* What a visitor actually sees. `welcome_message` is only the stored
+                      configuration and can differ from the generated greeting. */}
+                  <b>Welcome Message:</b>{' '}
+                  {String(bot.greeting_preview || bot.welcome_message || '').includes('\n') ? (
+                    <span style={{ whiteSpace: 'pre-line' }}>
+                      "{(bot.greeting_preview || bot.welcome_message).trim()}"
+                    </span>
+                  ) : (
+                    <span>"{bot.greeting_preview || bot.welcome_message}"</span>
+                  )}
                 </p>
                 <p>
                   <b>Industry:</b> {bot.project?.industry || 'General'}
@@ -440,6 +449,10 @@ export const BotOverview = () => {
                   value={editData.welcome_message}
                   onChange={(e) => setEditData({ ...editData, welcome_message: e.target.value })}
                 />
+                <span className="muted" style={{ fontSize: '12px' }}>
+                  Shown as-is to visitors when you write your own. Leave it at the default to let
+                  the assistant open with the standard greeting.
+                </span>
               </div>
 
               <Input

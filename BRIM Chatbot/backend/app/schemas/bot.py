@@ -36,6 +36,8 @@ class BotUpdate(BaseModel):
 class BotResponse(BotBase):
     id: int
     project_id: int
+    # What the chat actually opens with; `welcome_message` is the stored configuration.
+    greeting_preview: Optional[str] = None
     shareable_slug: str
     created_at: datetime
     updated_at: datetime

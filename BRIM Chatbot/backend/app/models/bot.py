@@ -18,6 +18,15 @@ class Bot(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
+    @property
+    def greeting_preview(self):
+        """The first message a visitor actually sees, so the editor cannot disagree with chat."""
+        # Imported here because the greeting service reads the message catalogue, which pulls in
+        # settings; a module-level import would create a cycle through the model package.
+        from app.services.greeting_service import GreetingService
+
+        return GreetingService.preview(self.welcome_message, self.language)
+
     project = relationship("Project", back_populates="bots")
     knowledge_sources = relationship("KnowledgeSource", back_populates="bot", cascade="all, delete-orphan")
     chunks = relationship("KnowledgeChunk", back_populates="bot", cascade="all, delete-orphan")

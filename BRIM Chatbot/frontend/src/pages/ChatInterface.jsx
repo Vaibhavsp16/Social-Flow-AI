@@ -313,6 +313,7 @@ export const ChatInterface = () => {
         id: greeting?.id || 'welcome',
         sender: 'bot',
         text: greeting?.content
+          || bot?.greeting_preview
           || bot?.welcome_message
           || `Hi there! 👋 I'm ${bot?.name || 'your AI assistant'}. How can I help you today?`,
         time: formatTime(greeting?.timestamp || new Date()),
@@ -348,7 +349,7 @@ export const ChatInterface = () => {
 
       const welcome = {
         id: 'welcome', sender: 'bot',
-        text: bot?.welcome_message || `Hi there! 👋 I'm ${bot?.name || 'your AI assistant'}. How can I help?`,
+        text: bot?.greeting_preview || bot?.welcome_message || `Hi there! 👋 I'm ${bot?.name || 'your AI assistant'}. How can I help?`,
         time: '', sources: [],
       };
       setMessages(mapped.length > 0 ? mapped : [welcome]);
@@ -385,7 +386,7 @@ export const ChatInterface = () => {
       return [
         {
           ...prev[0],
-          text: bot.welcome_message || `Hi there! 👋 I'm ${bot.name || 'your AI assistant'}. How can I help you today?`,
+          text: bot.greeting_preview || bot.welcome_message || `Hi there! 👋 I'm ${bot.name || 'your AI assistant'}. How can I help you today?`,
         },
       ];
     });
@@ -684,8 +685,8 @@ export const ChatInterface = () => {
                 <MessageBubble
                   key={msg.id || idx}
                   msg={
-                    msg.id === 'welcome' && bot?.welcome_message
-                      ? { ...msg, text: bot.welcome_message }
+                    msg.id === 'welcome' && (bot?.greeting_preview || bot?.welcome_message)
+                      ? { ...msg, text: bot.greeting_preview || bot.welcome_message }
                       : msg
                   }
                 />

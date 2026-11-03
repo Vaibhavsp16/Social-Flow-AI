@@ -67,6 +67,25 @@ class GreetingService:
 
 
     @classmethod
+    def preview(cls, welcome: Optional[str] = None, language: Optional[str] = None) -> str:
+        """
+        The exact first message a visitor sees, for the bot editor.
+
+        The editor used to show the stored `welcome_message`, which the greeting deliberately
+        ignores when it is the platform default — so the bot page and the chat disagreed. Both
+        now read this one function.
+        """
+        lang = LanguageService.normalise(language) or "en"
+        opening = (
+            (welcome or "").strip()
+            if cls._is_custom_welcome(welcome)
+            else translate(lang, "welcome_opening").strip()
+        )
+        # build() appends the open question to custom copy as well, so a preview that stopped at
+        # the owner's text disagreed with the chat on every bot that had one.
+        return opening + "\n\n" + translate(lang, "welcome_question").strip()
+
+    @classmethod
     def build(
         cls,
         bot_name: str,
