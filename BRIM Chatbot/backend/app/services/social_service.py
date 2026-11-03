@@ -197,9 +197,18 @@ class SocialService:
         profile["hashtags"] = list(
             dict.fromkeys(profile.get("hashtags") or [] + extract_hashtags(combined))
         )
-        profile["mentions"] = list(
-            dict.fromkeys(profile.get("mentions") or [] + extract_mentions(combined))
+        own_handle = (
+            str(profile.get("account_name") or "").lstrip("@").strip().lower()
+            or url.rstrip("/").rsplit("/", 1)[-1].split("?")[0].lower()
         )
+        profile["mentions"] = [
+            handle
+            for handle in dict.fromkeys(
+                profile.get("mentions") or [] + extract_mentions(combined)
+            )
+            # The profile's own handle is not an account it tagged.
+            if handle.lstrip("@").strip().lower() != own_handle
+        ]
 
         if name:
             profile["account_name"] = name
@@ -771,9 +780,14 @@ class SocialService:
         data["title"] = meta_content("og:title", "twitter:title") or (
             soup.title.get_text(strip=True) if soup.title else ""
         )
-        data["description"] = meta_content(
-            "og:description", "twitter:description", "description"
-        )
+        # og:description usually carries follower counts while the plain description carries the
+        # bio ("Your Property Experts / 0 Brokerage…"). Take the richest one, not the first.
+        candidates = [
+            meta_content("og:description"),
+            meta_content("twitter:description"),
+            meta_content("description"),
+        ]
+        data["description"] = max((text for text in candidates if text), key=len, default="")
 
         for block in soup.find_all("script", attrs={"type": "application/ld+json"}):
             raw = block.string or block.get_text() or ""
