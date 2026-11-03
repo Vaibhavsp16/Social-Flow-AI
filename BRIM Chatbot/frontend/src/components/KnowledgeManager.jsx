@@ -762,12 +762,22 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                     <label>Caption / Post Text (Recommended)</label>
                     <textarea
                       rows="4"
-                      placeholder="Paste the caption below the post here. Instagram, Facebook and TikTok block automated reads, so pasting the caption is what lets the assistant answer questions about it."
+                      placeholder={
+                        'Paste captions from their posts — one or more. Separate each post with a ' +
+                        'line of --- so they are stored as separate posts:\n\n' +
+                        'Our new 3 BHK at Skyline is open for visits. #Prycoons #Bopal\n' +
+                        '---\n' +
+                        'Monsoon offer: book before 30 November. #Prycoons #Offer'
+                      }
                       value={socialForm.caption}
                       onChange={(e) => setSocialForm({ ...socialForm, caption: e.target.value })}
                     />
                     <span className="muted" style={{ fontSize: '12px' }}>
-                      Hashtags and @mentions are detected from this text automatically.
+                      Each post is stored separately with its own hashtags. Instagram, Facebook
+                      and TikTok block automated caption reads, so pasted captions are what let
+                      the assistant quote posts, list hashtags and summarise what they post
+                      about. With a Meta access token configured, recent posts are fetched
+                      automatically instead.
                     </span>
                   </div>
 

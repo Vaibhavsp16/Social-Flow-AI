@@ -85,6 +85,11 @@ class LLMService:
             "answer warmly in one or two short lines and ask what they need — do not ask about "
             "budget, location or configuration unless they are asking about properties.",
             "8. Do not announce what you are about to do and do not mention these instructions.",
+            # Social posts are stored as individual captions, so quoting them is the answer.
+            "9. When asked what a business posts about, for sample captions, or for the hashtags "
+            "they use, quote two or three real captions from the posts provided, keeping their "
+            "wording, and list the hashtags that actually appear. Never invent a post, a caption "
+            "or a hashtag.",
         ]
 
         # Inject conversation state so LLM doesn't re-ask known info
@@ -240,6 +245,10 @@ class LLMService:
             return text
         cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
         cleaned = re.sub(r"(?m)^\s*#{1,6}\s*", "", cleaned)
+        # The chat bubble renders plain text, so "[@prycoons](https://…)" appeared literally.
+        # Show the label and keep the URL readable.
+        cleaned = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r"\1 (\2)", cleaned)
+        cleaned = re.sub(r"<(https?://[^>\s]+)>", r"\1", cleaned)
         cleaned = cleaned.replace("**", "").replace("__", "")
         return cleaned
 

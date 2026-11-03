@@ -28,7 +28,10 @@ class SocialLinkCreate(BaseModel):
     caption: Optional[str] = Field(
         default=None,
         max_length=8000,
-        description="Optional caption or description text copied from the post",
+        description=(
+            "Caption text copied from their posts. Separate multiple posts with a line of --- "
+            "to store each as its own post with its own hashtags."
+        ),
     )
 
     @field_validator("url")

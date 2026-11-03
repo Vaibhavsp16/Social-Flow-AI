@@ -81,6 +81,35 @@ def extract_mentions(text: str) -> List[str]:
     return names
 
 
+POST_SEPARATOR = re.compile(r"^\s*(?:-{3,}|={3,}|\*{3,})\s*$", re.MULTILINE)
+NUMBERED_HEADING = re.compile(r"(?m)^\s*(?:post\s*)?\d{1,2}\s*[.)\]:-]\s+")
+
+
+def parse_caption_posts(text: str) -> List[Dict[str, Any]]:
+    """
+    Split pasted text into individual posts.
+
+    Instagram and TikTok refuse anonymous reads, so the owner pastes captions. A block
+    separated by ---, ====== or numbered lines means several posts; anything else is one post.
+    Each post keeps its own hashtags so a question about hashtags can answer with real ones.
+    """
+    body = (text or "").strip()
+    if not body:
+        return []
+
+    blocks = [block.strip() for block in POST_SEPARATOR.split(body) if block.strip()]
+    if len(blocks) <= 1:
+        numbered = [part.strip() for part in NUMBERED_HEADING.split(body) if part.strip()]
+        if len(numbered) > 1:
+            blocks = numbered
+
+    posts: List[Dict[str, Any]] = []
+    for block in blocks[:20]:
+        caption = block.strip()
+        posts.append({"caption": caption, "hashtags": extract_hashtags(caption)})
+    return posts
+
+
 def _clean_caption(text: str) -> str:
     """Undo JSON string escapes and collapse the newlines platforms insert."""
     if not text:
@@ -126,11 +155,39 @@ class SocialService:
             if error:
                 profile["error"] = error[:300]
 
+        # Individual posts are what a visitor actually asks about ("what do they post",
+        # "which hashtags do they use", "show me a sample caption"). One profile blob cannot
+        # answer that well, so posts are collected as separate records.
+        posts: List[Dict[str, Any]] = list(profile.get("post_items") or [])
+
         if pasted_caption:
             # A caption supplied by the business owner is authoritative.
-            profile["caption"] = pasted_caption
+            pasted_posts = parse_caption_posts(pasted_caption)
+            posts.extend(pasted_posts)
+            profile["caption"] = pasted_caption if len(pasted_posts) == 1 else ""
             profile["method"] = "pasted-caption" if profile["method"] == "link-only" else (
                 profile["method"] + "+pasted-caption"
+            )
+
+        if not posts and profile.get("posts"):
+            # Handlers that expose only a list of strings still become quoteable posts.
+            posts = [{"caption": text} for text in profile["posts"]]
+
+        profile["post_items"] = posts
+        hashtag_counts: Dict[str, int] = {}
+        for post in posts:
+            post_hashtags = post.get("hashtags") or extract_hashtags(post.get("caption") or "")
+            post["hashtags"] = list(dict.fromkeys(post_hashtags))
+            for tag in post["hashtags"]:
+                hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
+        profile["hashtag_counts"] = dict(
+            sorted(hashtag_counts.items(), key=lambda item: item[1], reverse=True)
+        )
+        if posts:
+            profile["method"] = (
+                f"{profile['method']}+{len(posts)}-posts"
+                if profile["method"] != "link-only"
+                else f"{len(posts)}-posts"
             )
 
         # Mentions come from prose only; a handle inside the page title is the account itself.
@@ -176,8 +233,34 @@ class SocialService:
             lines.append(f"Audience: {profile['stats']}")
         if profile.get("links"):
             lines.append("Links shared: " + ", ".join(profile["links"][:5]))
-        if profile.get("posts"):
-            lines.append("Recent posts: " + " || ".join(profile["posts"][:5]))
+
+        posts = profile.get("post_items") or []
+        if posts:
+            lines.append(f"Number of posts on record: {len(posts)}")
+            for index, post in enumerate(posts[:12], start=1):
+                header = f"Post {index}"
+                if post.get("date"):
+                    header += f" ({post['date']})"
+                lines.append(header)
+                caption = (post.get("caption") or "").strip()
+                if caption:
+                    lines.append(f"Caption: {caption}")
+                if post.get("hashtags"):
+                    lines.append("Hashtags: " + " ".join(f"#{tag}" for tag in post["hashtags"]))
+                if post.get("permalink"):
+                    lines.append(f"Post link: {post['permalink']}")
+                engagement = []
+                if post.get("likes") is not None:
+                    engagement.append(f"{post['likes']} likes")
+                if post.get("comments") is not None:
+                    engagement.append(f"{post['comments']} comments")
+                if engagement:
+                    lines.append("Engagement: " + ", ".join(engagement))
+
+        counts = profile.get("hashtag_counts") or {}
+        if counts:
+            ranked = ", ".join(f"#{tag} ({count})" for tag, count in list(counts.items())[:15])
+            lines.append(f"Hashtags used across posts, most frequent first: {ranked}")
 
         method = profile.get("method", "link-only")
         if method == "link-only":
@@ -189,6 +272,189 @@ class SocialService:
         else:
             lines.append(f"Content source: {method}")
         return "\n".join(line for line in lines if str(line).strip())
+
+    # ── post harvesting ───────────────────────────────────────────────────────
+
+    GRAPH_VERSION = "v21.0"
+
+    @classmethod
+    def _graph(cls, path: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Call the Meta Graph API. Returns None when no token is configured."""
+        token = os.getenv("META_ACCESS_TOKEN") or os.getenv("INSTAGRAM_ACCESS_TOKEN") or ""
+        if not token:
+            return None
+        query = dict(params)
+        query["access_token"] = token
+        url = f"https://graph.facebook.com/{cls.GRAPH_VERSION}/{path.lstrip('/')}"
+        try:
+            assert_safe_url(url)
+            with httpx.Client(timeout=cls.TIMEOUT, follow_redirects=True) as client:
+                response = client.get(url, params=query)
+            if response.status_code >= 400:
+                logger.warning("Graph API %s -> %s %s", path, response.status_code, response.text[:200])
+                return None
+            return response.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Graph API %s failed: %s", path, exc)
+            return None
+
+    @classmethod
+    def _post_limit(cls) -> int:
+        try:
+            return max(1, min(int(os.getenv("SOCIAL_POST_LIMIT", "12")), 50))
+        except ValueError:
+            return 12
+
+    @classmethod
+    def _instagram_posts(cls) -> List[Dict[str, Any]]:
+        """Recent media for the connected Instagram business account."""
+        target = (os.getenv("INSTAGRAM_USER_ID") or "").strip() or "me"
+        payload = cls._graph(
+            f"{target}/media",
+            {
+                "fields": "caption,permalink,timestamp,like_count,comments_count,media_type",
+                "limit": cls._post_limit(),
+            },
+        )
+        posts: List[Dict[str, Any]] = []
+        for item in (payload or {}).get("data", []) or []:
+            caption = (item.get("caption") or "").strip()
+            posts.append(
+                {
+                    "caption": caption,
+                    "hashtags": extract_hashtags(caption),
+                    "permalink": item.get("permalink"),
+                    "date": (item.get("timestamp") or "")[:10],
+                    "likes": item.get("like_count"),
+                    "comments": item.get("comments_count"),
+                }
+            )
+        return posts
+
+    @classmethod
+    def _facebook_posts(cls) -> List[Dict[str, Any]]:
+        page_id = (os.getenv("FACEBOOK_PAGE_ID") or "").strip()
+        if not page_id:
+            return []
+        payload = cls._graph(
+            f"{page_id}/posts",
+            {"fields": "message,permalink_url,created_time", "limit": cls._post_limit()},
+        )
+        posts: List[Dict[str, Any]] = []
+        for item in (payload or {}).get("data", []) or []:
+            caption = (item.get("message") or "").strip()
+            posts.append(
+                {
+                    "caption": caption,
+                    "hashtags": extract_hashtags(caption),
+                    "permalink": item.get("permalink_url"),
+                    "date": (item.get("created_time") or "")[:10],
+                }
+            )
+        return posts
+
+    @classmethod
+    def _youtube_channel_id(cls, url: str) -> Optional[str]:
+        direct = re.search(r"/channel/(UC[\w-]{20,})", url)
+        if direct:
+            return direct.group(1)
+        html = cls._get(url) or ""
+        # The canonical link and externalId are the channel itself; the first "channelId" in the
+        # page often belongs to a recommended channel instead.
+        for pattern in (
+            r'<link rel="canonical" href="https://www\.youtube\.com/channel/(UC[\w-]{20,})"',
+            r'"externalId":"(UC[\w-]{20,})"',
+            r'<meta itemprop="identifier" content="(UC[\w-]{20,})"',
+            r'"channelId":"(UC[\w-]{20,})"',
+        ):
+            found = re.search(pattern, html)
+            if found:
+                return found.group(1)
+        return None
+
+    @classmethod
+    def _youtube_posts(cls, url: str) -> List[Dict[str, Any]]:
+        """Recent uploads with their descriptions, from YouTube's public channel feed."""
+        channel_id = cls._youtube_channel_id(url)
+        if not channel_id:
+            return []
+
+        feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+        soup = None
+        try:
+            assert_safe_url(feed_url)
+            with httpx.Client(timeout=cls.TIMEOUT, follow_redirects=True) as client:
+                response = client.get(feed_url, headers={"User-Agent": BROWSER_UA})
+            if response.status_code < 400 and "<entry>" in response.text:
+                soup = BeautifulSoup(response.text, "xml")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("YouTube feed failed for %s: %s", channel_id, exc)
+
+        # The public feed is unavailable on some networks, so read the channel page instead.
+        if soup is None:
+            return cls._youtube_posts_from_page(url)
+
+        namespaces = {"yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
+        posts: List[Dict[str, Any]] = []
+        for entry in soup.find_all("entry")[: cls._post_limit()]:
+            title = (entry.find("title").get_text(strip=True) if entry.find("title") else "")
+            description_tag = entry.find("media:description", namespaces)
+            description = description_tag.get_text(" ", strip=True) if description_tag else ""
+            published = entry.find("published")
+            link_tag = entry.find("link")
+            caption = f"{title}. {description}".strip() if description else title
+            posts.append(
+                {
+                    "caption": caption[:1200],
+                    "hashtags": extract_hashtags(description or title),
+                    "permalink": link_tag.get("href") if link_tag else None,
+                    "date": published.get_text(strip=True)[:10] if published else None,
+                }
+            )
+        return posts
+
+    @classmethod
+    def _youtube_posts_from_page(cls, url: str, limit: int = 3) -> List[Dict[str, Any]]:
+        """Recent uploads scraped from the channel page, with each video's description."""
+        try:
+            html = cls._get(url) or ""
+        except Exception as exc:  # noqa: BLE001
+            logger.info("YouTube channel page failed: %s", exc)
+            return []
+
+        video_ids = []
+        for match in re.findall(r'"videoId":"([\w-]{11})"', html):
+            if match not in video_ids:
+                video_ids.append(match)
+        if not video_ids:
+            return []
+
+        posts: List[Dict[str, Any]] = []
+        for video_id in video_ids[:limit]:
+            watch = f"https://www.youtube.com/watch?v={video_id}"
+            description = ""
+            title = ""
+            try:
+                page = cls._get(watch) or ""
+                found = re.search(r'"shortDescription":"(.*?)","', page, re.S)
+                if found:
+                    description = _clean_caption(found.group(1))
+                title_match = re.search(r'<meta name="title" content="([^"]+)"', page)
+                if title_match:
+                    title = html_lib.unescape(title_match.group(1))
+            except Exception:  # noqa: BLE001
+                continue
+            if not (title or description):
+                continue
+            caption = f"{title}. {description}".strip() if description else title
+            posts.append(
+                {
+                    "caption": caption[:1200],
+                    "hashtags": extract_hashtags(description or title),
+                    "permalink": watch,
+                }
+            )
+        return posts
 
     # ── fetching ──────────────────────────────────────────────────────────────
     @classmethod
@@ -258,6 +524,16 @@ class SocialService:
         except Exception as exc:  # noqa: BLE001
             error = error or str(exc)
 
+        # A channel feed gives recent uploads with descriptions and hashtags, no API key needed.
+        if not cls._instagram_shortcode(url):
+            try:
+                channel_posts = cls._youtube_posts(url)
+                if channel_posts:
+                    data["post_items"] = channel_posts
+                    method = "youtube-feed"
+            except Exception as exc:  # noqa: BLE001
+                error = error or str(exc)
+
         if not data:
             return {}, "link-only", error
         return data, method, error
@@ -265,6 +541,17 @@ class SocialService:
     @classmethod
     def _instagram(cls, url: str) -> Tuple[Dict[str, Any], str, Optional[str]]:
         data: Dict[str, Any] = {}
+
+        # A connected business account is the only reliable way to read real captions.
+        if not cls._instagram_shortcode(url):
+            try:
+                account_posts = cls._instagram_posts()
+                if account_posts:
+                    data["post_items"] = account_posts
+                    return data, "instagram-graph-posts", None
+            except Exception as exc:  # noqa: BLE001
+                logger.info("Instagram media list failed: %s", exc)
+
         token = os.getenv("META_ACCESS_TOKEN")
         if token:
             try:
@@ -333,6 +620,16 @@ class SocialService:
     def _facebook(cls, url: str) -> Tuple[Dict[str, Any], str, Optional[str]]:
         token = os.getenv("META_ACCESS_TOKEN")
         data: Dict[str, Any] = {}
+
+        # Page posts carry the same captions and hashtags visitors ask about.
+        try:
+            page_posts = cls._facebook_posts()
+            if page_posts:
+                data["post_items"] = page_posts
+                return data, "facebook-graph-posts", None
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Facebook page posts failed: %s", exc)
+
         if token:
             try:
                 payload = json.loads(
