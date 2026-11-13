@@ -43,6 +43,13 @@ class LeadDetail(LeadOut):
     budget_max: Optional[int] = None
     status: str = "NEW"
     created_at: Optional[Any] = None
+    # When the person is comfortable being called, and where the lead came from — the two things
+    # that decide whether the team can act on it.
+    preferred_time: Optional[str] = None
+    timezone: Optional[str] = None
+    meeting_requested: bool = False
+    source: Optional[str] = None
+    meeting: Optional[Dict[str, Any]] = None
 
 
 class PropertySearchResult(BaseModel):

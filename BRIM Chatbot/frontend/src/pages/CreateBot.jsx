@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PREDEFINED_INDUSTRIES } from '../constants/industries';
+import {
+  USE_CASE_OPTIONS,
+  RESPONSE_STYLE_OPTIONS,
+  LEAD_COLLECTION_OPTIONS,
+  HANDOFF_OPTIONS,
+  styleToKey,
+  leadPolicyToKey,
+  handoffToKey,
+  useCaseToKey,
+} from '../constants/behaviour';
 import { projectService } from '../services/projectService';
 import { botService } from '../services/botService';
 import { knowledgeService } from '../services/knowledgeService';
@@ -117,6 +127,11 @@ export const CreateBot = () => {
         personality: formData.personality,
         welcome_message: formData.welcomeMessage.trim(),
         status: 'Live',
+        // Behaviour, not decoration: these four drive the system prompt and the conversation flow.
+        primary_use_case: useCaseToKey(formData.primaryUseCase),
+        response_style: styleToKey(formData.responseStyle),
+        lead_collection: leadPolicyToKey(formData.leadCollection),
+        human_handoff: handoffToKey(formData.humanHandoff),
       });
 
       // 3. Attach knowledge sources selected in Step 2
@@ -304,13 +319,7 @@ export const CreateBot = () => {
 
             <Select
               label="Primary use case"
-              options={[
-                'Customer Support',
-                'Lead Generation',
-                'Product Discovery',
-                'Sales Assistance',
-                'Information & FAQ',
-              ]}
+              options={USE_CASE_OPTIONS.map((option) => option.label)}
               value={formData.primaryUseCase}
               onChange={(e) => setFormData({ ...formData, primaryUseCase: e.target.value })}
             />
@@ -470,14 +479,14 @@ export const CreateBot = () => {
 
             <Select
               label="Lead collection"
-              options={['When relevant', 'Always', 'Never']}
+              options={LEAD_COLLECTION_OPTIONS.map((option) => option.label)}
               value={formData.leadCollection}
               onChange={(e) => setFormData({ ...formData, leadCollection: e.target.value })}
             />
 
             <Select
               label="Human handoff"
-              options={['Allow when needed', 'Always offer', 'Disabled']}
+              options={HANDOFF_OPTIONS.map((option) => option.label)}
               value={formData.humanHandoff}
               onChange={(e) => setFormData({ ...formData, humanHandoff: e.target.value })}
             />
@@ -485,7 +494,7 @@ export const CreateBot = () => {
             <div className="field span2">
               <Select
                 label="Response style"
-                options={['Simple & clear', 'Detailed', 'Business professional']}
+                options={RESPONSE_STYLE_OPTIONS.map((option) => option.label)}
                 value={formData.responseStyle}
                 onChange={(e) => setFormData({ ...formData, responseStyle: e.target.value })}
               />

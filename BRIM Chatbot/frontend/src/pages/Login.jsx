@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { GoogleButton } from '../components/GoogleButton';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -11,7 +12,7 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,6 +37,17 @@ export const Login = () => {
       setError(err.userMessage || 'Invalid email or password.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogle = async (credential) => {
+    setError('');
+    try {
+      await loginWithGoogle(credential);
+      showToast('Signed in with Google.');
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err.userMessage || 'Google sign-in failed. Please try again.');
     }
   };
 
@@ -95,16 +107,11 @@ export const Login = () => {
         OR
       </div>
 
-      <Button
-        type="button"
-        variant="secondary"
-        full
-        onClick={() => {
-          showToast('Social login will be connected soon');
-        }}
-      >
-        Continue with Google
-      </Button>
+      <GoogleButton
+        onCredential={handleGoogle}
+        onError={(message) => setError(message)}
+        disabled={loading}
+      />
 
       <div style={{ marginTop: '16px', textAlign: 'center' }}>
         <button

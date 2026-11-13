@@ -69,3 +69,9 @@ artifacts/*.md
 backend/_fixtures/
 backend/_diag_tmp/
 backend/_verify_tmp/
+
+# Verification artifacts (screenshots and findings from manual/browser checks)
+shots/
+screenshots/
+findings-*.md
+check_c_embed_*.png

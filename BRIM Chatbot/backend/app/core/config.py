@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Union[str, None] = None
     EMBEDDING_PROVIDER: str = EMBEDDING_PROVIDER_AUTO
 
+    # Public web app. Used to build shareable links, the embed snippet and the /p/{slug} page the
+    # widget frames. Without it, links point at the API host and every share is broken.
+    FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+    # The hostname a customer's CNAME should target. Defaults to the FRONTEND_BASE_URL host.
+    PUBLIC_APP_HOST: Union[str, None] = os.getenv("PUBLIC_APP_HOST")
+
+    # Google sign-in. The browser gets an ID token from Google Identity Services and the API
+    # verifies it; no client secret is needed for that flow.
+    GOOGLE_CLIENT_ID: Union[str, None] = os.getenv("GOOGLE_CLIENT_ID")
+
     # CORS. Declared as a plain string so it can be given either as a comma separated list or
     # as a JSON array in .env; use `cors_origins` to read it as a list.
     BACKEND_CORS_ORIGINS: str = (
@@ -60,6 +70,21 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 pass
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    @property
+    def frontend_url(self) -> str:
+        """Deployed app origin, no trailing slash."""
+        return (self.FRONTEND_BASE_URL or "http://localhost:5173").rstrip("/")
+
+    @property
+    def app_host(self) -> str:
+        """Hostname a custom domain should CNAME to."""
+        if self.PUBLIC_APP_HOST:
+            return self.PUBLIC_APP_HOST.strip().lower()
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.frontend_url)
+        return (parsed.hostname or "").lower()
 
     def get_database_url(self) -> str:
         if self.DATABASE_URL:

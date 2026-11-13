@@ -67,6 +67,27 @@ def seed_properties(
     }
 
 
+def _latest_meeting(db: Session, lead: Lead) -> dict | None:
+    """The most recent meeting booked for this lead, if any."""
+    from app.models.meeting import Meeting
+
+    meeting = (
+        db.query(Meeting)
+        .filter(Meeting.lead_id == lead.id)
+        .order_by(Meeting.id.desc())
+        .first()
+    )
+    if not meeting:
+        return None
+    return {
+        "id": meeting.id,
+        "mode": meeting.mode,
+        "preferred_slot": meeting.preferred_slot,
+        "scheduled_for": meeting.scheduled_for.isoformat() if meeting.scheduled_for else None,
+        "status": meeting.status,
+    }
+
+
 @router.get("/bots/{bot_id}/leads", response_model=List[LeadDetail])
 def list_leads(
     bot_id: int,
@@ -98,6 +119,11 @@ def list_leads(
             budget_max=lead.budget_max,
             status=lead.status,
             created_at=lead.created_at,
+            preferred_time=lead.preferred_time,
+            timezone=lead.timezone,
+            meeting_requested=lead.meeting_requested,
+            source=lead.source,
+            meeting=_latest_meeting(db, lead),
         )
         for lead in rows
     ]

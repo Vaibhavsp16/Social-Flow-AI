@@ -16,7 +16,9 @@ import { Analytics } from '../pages/Analytics';
 import { Pricing } from '../pages/Pricing';
 import { ChatPreview } from '../pages/ChatPreview';
 import { ChatInterface } from '../pages/ChatInterface';
+import { PublicChat } from '../pages/PublicChat';
 import { Admin } from '../pages/Admin';
+import { DomainEntry } from './DomainEntry';
 
 export const AppRoutes = () => {
   return (
@@ -26,6 +28,9 @@ export const AppRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
       </Route>
+
+      {/* Public chatbot page — the shareable link, the embed target and custom domains */}
+      <Route path="/p/:slug" element={<PublicChat />} />
 
       {/* Standalone Chat & Preview Routes */}
       <Route path="/preview" element={<ChatPreview />} />
@@ -48,8 +53,8 @@ export const AppRoutes = () => {
         </Route>
       </Route>
 
-      {/* Catch-all fallback */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Anything else: on a customer's own domain this opens that domain's bot. */}
+      <Route path="*" element={<DomainEntry />} />
     </Routes>
   );
 };

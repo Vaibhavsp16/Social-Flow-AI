@@ -61,6 +61,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (credential) => {
+    setIsLoading(true);
+    setAuthError(null);
+    try {
+      const data = await authService.loginWithGoogle(credential);
+      setUser(data.user);
+      setToken(data.access_token);
+      return data.user;
+    } catch (err) {
+      setAuthError(err.userMessage || 'Google sign-in failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = () => {
     authService.logout();
     setUser(null);
@@ -85,6 +101,7 @@ export const AuthProvider = ({ children }) => {
     authError,
     login,
     signup,
+    loginWithGoogle,
     logout,
     refreshUser,
   };

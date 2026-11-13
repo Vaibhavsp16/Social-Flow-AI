@@ -19,6 +19,23 @@ export const authService = {
     return response.data;
   },
 
+  // ── Google sign-in ────────────────────────────────────────────────────────
+  // The browser gets an ID token from Google Identity Services; the API verifies it. No client
+  // secret ever reaches the browser.
+  async googleConfig() {
+    const response = await api.get('/auth/google/config');
+    return response.data;
+  },
+
+  async loginWithGoogle(credential) {
+    const response = await api.post('/auth/google', { credential });
+    if (response.data.access_token) {
+      localStorage.setItem('brim_auth_token', response.data.access_token);
+      localStorage.setItem('brim_auth_user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  },
+
   async getCurrentUser() {
     const response = await api.get('/auth/me');
     localStorage.setItem('brim_auth_user', JSON.stringify(response.data));

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme Interiors — embed test host page</title>
+    <style>
+      body { margin: 0; font-family: Georgia, serif; background: #fbf9f5; color: #23201c; }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 64px 24px; }
+      h1 { font-size: 34px; margin: 0 0 12px; }
+      p { line-height: 1.7; color: #554f47; }
+      .note { margin-top: 28px; padding: 14px 16px; background: #fff; border: 1px solid #e6e0d6;
+              border-radius: 10px; font-family: ui-monospace, monospace; font-size: 12.5px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Acme Interiors</h1>
+      <p>
+        This is a stand-in for a customer's own website. It shares nothing with the chat app —
+        different page, different markup — and the only thing connecting it to the chatbot is the
+        snippet at the bottom of this file.
+      </p>
+      <p>
+        If the widget works, a launcher appears in the bottom-right corner. Clicking it should open
+        the assistant in an overlay without leaving this page.
+      </p>
+      <div class="note" id="status">Waiting for ?bot=&lt;slug&gt; in the URL…</div>
+    </div>
+
+    <script>
+      // The snippet under test, injected the same way a customer would paste it: read the slug from
+      // the query string so one host page can test any bot.
+      (function () {
+        var slug = new URLSearchParams(window.location.search).get('bot');
+        var status = document.getElementById('status');
+
+        if (!slug) {
+          status.textContent = 'No bot slug supplied. Open this page as /embed-test.html?bot=<slug>';
+          return;
+        }
+
+        var script = document.createElement('script');
+        script.src = 'http://localhost:8000/api/public/widget.js';
+        script.setAttribute('data-bot', slug);
+        script.async = true;
+        script.onload = function () {
+          status.textContent = 'widget.js loaded for "' + slug + '". Looking for the launcher…';
+        };
+        script.onerror = function () {
+          status.textContent = 'widget.js FAILED to load from the API.';
+        };
+        document.body.appendChild(script);
+      })();
+    </script>
+  </body>
+</html>

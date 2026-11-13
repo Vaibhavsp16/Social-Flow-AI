@@ -48,6 +48,16 @@ def _pct(numerator: int, denominator: int) -> float:
     return round((numerator / denominator) * 100, 1) if denominator else 0.0
 
 
+def unique_visitors(convos: Iterable[Conversation]) -> int:
+    """Distinct people, not distinct chats.
+
+    ``session_id`` is per-conversation, so counting it made a visitor who opened three chats show up
+    as three users. Rows created before ``visitor_id`` existed fall back to their session id, which
+    is the best identity they have.
+    """
+    return len({(c.visitor_id or c.session_id) for c in convos if (c.visitor_id or c.session_id)})
+
+
 def _sources_of(message: Message) -> List[Dict[str, Any]]:
     try:
         payload = json.loads(message.metadata_json or "{}")
@@ -136,6 +146,116 @@ class AnalyticsService:
             for day, counts in sorted(per_day.items())
         ]
 
+    @staticmethod
+    def _meeting_count(db: Session, bot_id: int, start: datetime, end: datetime) -> int:
+        from app.models.meeting import Meeting
+
+        return (
+            db.query(Meeting)
+            .filter(
+                Meeting.bot_id == bot_id,
+                Meeting.created_at >= start,
+                Meeting.created_at <= end,
+            )
+            .count()
+        )
+
+    @staticmethod
+    def _contact_summary(leads: List[Lead]) -> Dict[str, Any]:
+        """How reachable the captured leads actually are.
+
+        A phone number with no time is a lead the team has to chase twice, so the split is worth
+        showing rather than a bare lead count.
+        """
+        with_phone = [lead for lead in leads if (lead.phone or "").strip()]
+        with_time = [lead for lead in leads if (lead.preferred_time or "").strip()]
+        times = Counter(
+            (lead.preferred_time or "").strip().lower()
+            for lead in leads
+            if (lead.preferred_time or "").strip()
+        )
+        return {
+            "captured": len(leads),
+            "with_phone": len(with_phone),
+            "with_preferred_time": len(with_time),
+            "meeting_requested": sum(1 for lead in leads if lead.meeting_requested),
+            "top_preferred_times": [
+                {"slot": slot, "count": count} for slot, count in times.most_common(5)
+            ],
+            "sources": dict(Counter((lead.source or "chatbot") for lead in leads)),
+        }
+
+    # ── live counters ─────────────────────────────────────────────────────────
+
+    @classmethod
+    def live_report(cls, db: Session, bot_id: int, active_window_minutes: int = 5) -> Dict[str, Any]:
+        """Small, cheap counters for a chat screen that updates while people are talking.
+
+        Deliberately separate from ``bot_report``: this runs every few seconds from an open tab, so
+        it counts rows in a narrow window instead of loading every conversation and message.
+        """
+        from app.models.meeting import Meeting
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        today_start = datetime.combine(now.date(), time.min)
+        active_since = now - timedelta(minutes=max(active_window_minutes, 1))
+
+        conversations_today = (
+            db.query(Conversation)
+            .filter(Conversation.bot_id == bot_id, Conversation.started_at >= today_start)
+            .count()
+        )
+        # Every message, both directions: the tile says "Messages today", so counting only visitor
+        # turns understated the number by half and made a working bot look idle.
+        messages_today = (
+            db.query(Message)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .filter(
+                Conversation.bot_id == bot_id,
+                Message.timestamp >= today_start,
+            )
+            .count()
+        )
+        leads_today = (
+            db.query(Lead)
+            .filter(Lead.bot_id == bot_id, Lead.created_at >= today_start)
+            .count()
+        )
+        meetings_today = (
+            db.query(Meeting)
+            .filter(Meeting.bot_id == bot_id, Meeting.created_at >= today_start)
+            .count()
+        )
+        active_now = (
+            db.query(Conversation.id)
+            .filter(
+                Conversation.bot_id == bot_id,
+                Conversation.started_at >= active_since,
+            )
+            .count()
+        )
+        last_message_at = (
+            db.query(Message.timestamp)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .filter(Conversation.bot_id == bot_id)
+            .order_by(Message.timestamp.desc())
+            .limit(1)
+            .scalar()
+        )
+
+        return {
+            "bot_id": bot_id,
+            "generated_at": now.isoformat() + "Z",
+            "today": {
+                "conversations": conversations_today,
+                "messages": messages_today,
+                "leads": leads_today,
+                "meetings": meetings_today,
+            },
+            "active_now": active_now,
+            "last_message_at": last_message_at.isoformat() + "Z" if last_message_at else None,
+        }
+
     # ── bot-level ─────────────────────────────────────────────────────────────
 
     @classmethod
@@ -205,10 +325,11 @@ class AnalyticsService:
             "has_data": total > 0,
             "totals": {
                 "conversations": total,
-                "unique_users": len({c.session_id for c in convos}),
+                "unique_users": unique_visitors(convos),
                 "messages": len(messages),
                 "leads": len(leads),
                 "handoffs": len(handoffs),
+                "meetings": cls._meeting_count(db, bot_id, window_start, window_end),
                 "resolved": len(resolved),
                 "unresolved": total - len(resolved),
                 "resolution_rate": _pct(len(resolved), total),
@@ -223,6 +344,8 @@ class AnalyticsService:
                     intent_counts.get(key, 0) for key in ("buying", "renting", "browsing")
                 ),
             },
+            "contacts": cls._contact_summary(leads),
+            "channels": Counter((c.channel or "web") for c in convos),
             "volume": cls._volume(convos, messages),
             "knowledge": {
                 "sources": len(knowledge_sources),
@@ -337,7 +460,7 @@ class AnalyticsService:
             "totals": {
                 "bots": len(bots),
                 "conversations": total,
-                "unique_users": len({c.session_id for c in convos}),
+                "unique_users": unique_visitors(convos),
                 "messages": len(messages),
                 "leads": len(leads),
                 "handoffs": len(handoffs),

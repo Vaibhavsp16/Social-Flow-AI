@@ -28,8 +28,8 @@ export const chatService = {
     return response.data;
   },
 
-  createPublicConversation: async (slug) => {
-    const response = await api.post(`/public/conversations/${slug}`);
+  createPublicConversation: async (slug, payload = {}) => {
+    const response = await api.post(`/public/conversations/${slug}`, payload);
     return response.data;
   },
 
@@ -43,10 +43,10 @@ export const chatService = {
     return response.data;
   },
 
-  listConversations: async (botId, limit = 50) => {
-    const response = await api.get(`/bots/${botId}/conversations`, {
-      params: { limit },
-    });
+  listConversations: async (botId, limit = 50, visitorId = null) => {
+    const params = { limit };
+    if (visitorId) params.visitor_id = visitorId;
+    const response = await api.get(`/bots/${botId}/conversations`, { params });
     return response.data;
   },
 
@@ -71,10 +71,27 @@ export const chatService = {
     return response.data;
   },
 
-  sendPublicConversationMessage: async (conversationId, message) => {
-    const response = await api.post(`/public/conversations/${conversationId}/messages`, {
-      message,
+  sendPublicConversationMessage: async (conversationId, message, language = null) => {
+    const payload = { message };
+    if (language) payload.language = language;
+    const response = await api.post(`/public/conversations/${conversationId}/messages`, payload);
+    return response.data;
+  },
+
+  // ── Proactive contact ─────────────────────────────────────────────────────
+  /** Ask the bot to re-engage a visitor who went quiet. Fires at most once per conversation. */
+  nudge: async (conversationId) => {
+    const response = await api.post(`/public/conversations/${conversationId}/nudge`, {
+      kind: 'idle',
     });
+    return response.data;
+  },
+
+  submitContact: async (conversationId, payload, authenticated = false) => {
+    const path = authenticated
+      ? `/conversations/${conversationId}/contact`
+      : `/public/conversations/${conversationId}/contact`;
+    const response = await api.post(path, payload);
     return response.data;
   },
 

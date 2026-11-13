@@ -24,15 +24,25 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     bot_id = Column(Integer, ForeignKey("bots.id", ondelete="CASCADE"), nullable=False, index=True)
     session_id = Column(String(128), nullable=False, index=True)
+    # Stable browser identity. A visitor who opens five chats is one person; `session_id` is
+    # per-chat, so counting it as a user inflated "unique users" by the number of chats.
+    visitor_id = Column(String(64), nullable=True, index=True)
+    # Where the chat happened: web | embed | preview. Preview chats belong to the bot owner and are
+    # excluded from visitor counts.
+    channel = Column(String(32), default="web", nullable=False)
     intent = Column(String(100), nullable=True, default="browsing")
     status = Column(String(50), default=ConversationStatus.ACTIVE.value, nullable=False, index=True)
     # JSON blob: {"intent": "buying", "location": "Ambli", "bhk": 3, ...}
     conversation_state = Column(Text, default="{}", nullable=False)
+    # Guards the two proactive prompts so each fires at most once per conversation.
+    contact_prompted_at = Column(DateTime, nullable=True)
+    idle_prompted_at = Column(DateTime, nullable=True)
     started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     ended_at = Column(DateTime, nullable=True)
 
     bot = relationship("Bot", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan", order_by="Message.timestamp")
+    meetings = relationship("Meeting", back_populates="conversation", cascade="all, delete-orphan")
 
 
 class Message(Base):

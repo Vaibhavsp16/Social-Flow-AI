@@ -9,13 +9,51 @@ import { analyticsService, rangeParams } from '../services/analyticsService';
  * Real bot metrics. Every number comes from /analytics/bots/{id}; when the window holds no
  * conversations the component says so instead of rendering zeros as if they were performance.
  */
+function LiveStat({ label, value }) {
+  return (
+    <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px', fontSize: '13px' }}>
+      <b style={{ fontSize: '15px' }}>{value ?? 0}</b>
+      <span className="muted" style={{ fontSize: '12px' }}>
+        {label}
+      </span>
+    </span>
+  );
+}
+
 export const BotMetrics = ({ botId, compact = false }) => {
   const { showToast } = useToast();
   const [days, setDays] = useState(30);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [live, setLive] = useState(null);
 
   const params = useMemo(() => rangeParams(days), [days]);
+
+  // Counters refresh on their own so the numbers move while someone is talking to the bot, which is
+  // the whole point of an analytics screen during a demo. The full report stays on its own cadence
+  // because it is expensive; this endpoint is a handful of counts.
+  useEffect(() => {
+    if (!botId) return undefined;
+    let cancelled = false;
+
+    const pull = () => {
+      analyticsService
+        .botLive(botId)
+        .then((payload) => {
+          if (!cancelled) setLive(payload);
+        })
+        .catch(() => {
+          if (!cancelled) setLive(null);
+        });
+    };
+
+    pull();
+    const timer = setInterval(pull, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [botId]);
 
   useEffect(() => {
     if (!botId) return undefined;
@@ -55,7 +93,7 @@ export const BotMetrics = ({ botId, compact = false }) => {
         <div>
           <h3 style={{ margin: 0, fontSize: '16px' }}>Performance</h3>
           <p className="muted" style={{ fontSize: '12px', margin: '2px 0 0' }}>
-            {params.start} → {params.end} · unique users = distinct sessions · resolved = lead captured or ended without handoff
+            {params.start} → {params.end} · unique users = distinct visitors · resolved = lead captured or ended without handoff
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -81,6 +119,43 @@ export const BotMetrics = ({ botId, compact = false }) => {
         <StatCard label="Leads" value={totals.leads ?? 0} />
         <StatCard label="Handoffs" value={totals.handoffs ?? 0} />
         <StatCard label="Resolution rate" value={hasData ? `${totals.resolution_rate ?? 0}%` : '—'} />
+      </div>
+
+      <div
+        className="card"
+        style={{
+          marginTop: '14px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: '18px',
+          padding: '12px 16px',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12px', fontWeight: 600 }}>
+          <span
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: live ? '#16a34a' : '#c0c4cc',
+              boxShadow: live ? '0 0 0 3px rgba(22,163,74,0.15)' : 'none',
+            }}
+          />
+          {live ? 'Live' : 'Not connected'}
+        </span>
+        {live && (
+          <>
+            <LiveStat label="Active now" value={live.active_now} />
+            <LiveStat label="Chats today" value={live.today?.conversations} />
+            <LiveStat label="Messages today" value={live.today?.messages} />
+            <LiveStat label="Contacts today" value={live.today?.leads} />
+            <LiveStat label="Meetings today" value={live.today?.meetings} />
+            <span className="muted" style={{ marginLeft: 'auto', fontSize: '11.5px' }}>
+              updated {new Date(live.generated_at).toLocaleTimeString()} · refreshes every 10s
+            </span>
+          </>
+        )}
       </div>
 
       {!loading && !hasData && (

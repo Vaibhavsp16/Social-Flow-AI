@@ -24,16 +24,24 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Pages that must survive an expired token. A public chatbot page has no account to protect, and
+// bouncing it to /login because a leftover token from a previous session had expired meant the
+// shared link appeared to be broken on first visit and worked on reload.
+const PUBLIC_PATHS = ['/p/', '/login', '/signup'];
+
+function isPublicPath(pathname) {
+  return PUBLIC_PATHS.some((prefix) => pathname.startsWith(prefix));
+}
+
 // Response interceptor to format errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear token on 401 if unauthorized
-      const currentPath = window.location.pathname;
-      if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
-        localStorage.removeItem('brim_auth_token');
-        localStorage.removeItem('brim_auth_user');
+      // Clear the dead token everywhere, but only navigate away from pages that require it.
+      localStorage.removeItem('brim_auth_token');
+      localStorage.removeItem('brim_auth_user');
+      if (!isPublicPath(window.location.pathname)) {
         window.location.href = '/login';
       }
     }

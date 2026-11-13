@@ -22,7 +22,14 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     id: int
     role: str
+    avatar_url: Optional[str] = None
+    auth_provider: Optional[str] = "local"
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GoogleAuthRequest(BaseModel):
+    # The ID token (JWT) returned by Google Identity Services in the browser.
+    credential: str = Field(..., min_length=20, max_length=8000)

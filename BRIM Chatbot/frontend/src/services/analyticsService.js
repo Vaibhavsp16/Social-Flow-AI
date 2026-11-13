@@ -28,6 +28,9 @@ export const analyticsService = {
   bot: (botId, params) =>
     api.get(`/analytics/bots/${botId}`, { params }).then((r) => r.data),
 
+  /** Cheap counters for the live strip; polled every 10s, so it must stay small. */
+  botLive: (botId) => api.get(`/analytics/bots/${botId}/live`).then((r) => r.data),
+
   report: (kind, params) => api.get(`/reports/${kind}`, { params }).then((r) => r.data),
 
   downloadCsv: (kind, params = {}) =>

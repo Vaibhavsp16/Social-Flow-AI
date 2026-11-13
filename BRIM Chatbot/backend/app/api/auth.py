@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.database.session import get_db
-from app.schemas.user import UserCreate, UserLogin, UserResponse
+from app.schemas.user import GoogleAuthRequest, UserCreate, UserLogin, UserResponse
 from app.schemas.token import Token
 from app.services.auth_service import AuthService
 from app.models.user import User
@@ -55,3 +55,46 @@ def get_current_user_profile(current_user: User = Depends(get_current_user)):
     Get current logged in user details.
     """
     return current_user
+
+
+# ── Google sign-in ────────────────────────────────────────────────────────────
+
+@router.get("/google/config")
+def google_config():
+    """Tells the web app whether Google sign-in is usable, and which client id to use.
+
+    Returned publicly because the browser needs it before anyone has a token. The client id is not
+    a secret; it is visible in every page that renders the button.
+    """
+    from app.core.config import settings
+
+    enabled = AuthService.google_enabled()
+    return {
+        "enabled": enabled,
+        "client_id": settings.GOOGLE_CLIENT_ID or None,
+        # Actionable rather than a bare false: whoever hits this needs to know which setting to set.
+        "message": None if enabled else (
+            "Google sign-in is off. Set GOOGLE_CLIENT_ID on the API and add this site's origin "
+            "under Authorised JavaScript origins in Google Cloud Console."
+        ),
+    }
+
+
+@router.post("/google", response_model=Token)
+def google_signin(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """Sign in (or sign up) with a Google ID token.
+
+    Same response shape as password login, so the client stores it identically.
+    """
+    user, token = AuthService.authenticate_google(db=db, credential=payload.credential)
+    log_activity(
+        db, ActivityType.USER_LOGIN.value,
+        user_id=user.id, entity_type="user", entity_id=user.id,
+        metadata={"provider": "google"},
+    )
+    db.commit()
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user,
+    }

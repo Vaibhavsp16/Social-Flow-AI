@@ -39,3 +39,7 @@ services:
         value: openai
       - key: RATE_LIMIT_ENABLED
         value: "true"
+      - key: FRONTEND_BASE_URL
+        value: https://social-flow-ai-frontend.vercel.app
+      - key: GOOGLE_CLIENT_ID
+        sync: false

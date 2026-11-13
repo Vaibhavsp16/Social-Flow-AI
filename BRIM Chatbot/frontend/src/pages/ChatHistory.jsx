@@ -170,6 +170,9 @@ export const ChatHistory = () => {
               <thead>
                 <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                   <th style={{ padding: '12px 18px', fontWeight: 600, color: '#4b5563' }}>Session ID</th>
+                  {/* One person opening five chats is five sessions and one visitor. Without this
+                      column the list reads as five different customers. */}
+                  <th style={{ padding: '12px 18px', fontWeight: 600, color: '#4b5563' }}>Visitor</th>
                   <th style={{ padding: '12px 18px', fontWeight: 600, color: '#4b5563' }}>Bot</th>
                   <th style={{ padding: '12px 18px', fontWeight: 600, color: '#4b5563' }}>Intent</th>
                   <th style={{ padding: '12px 18px', fontWeight: 600, color: '#4b5563' }}>Status</th>
@@ -197,6 +200,9 @@ export const ChatHistory = () => {
                     >
                       <td style={{ padding: '14px 18px', fontFamily: 'monospace', fontSize: '13px', color: '#4b5563' }}>
                         {c.session_id ? c.session_id.substring(0, 10) + '…' : `#${c.id}`}
+                      </td>
+                      <td style={{ padding: '14px 18px', fontFamily: 'monospace', fontSize: '13px', color: '#4b5563' }}>
+                        {c.visitor_id ? `${c.visitor_id.substring(0, 8)}…` : '—'}
                       </td>
                       <td style={{ padding: '14px 18px', fontWeight: 600, color: '#1f2937' }}>
                         {botName}

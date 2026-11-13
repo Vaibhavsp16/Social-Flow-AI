@@ -138,7 +138,7 @@ export const Analytics = () => {
 
       <p className="muted" style={{ fontSize: '12.5px', marginTop: '-6px' }}>
         {params.start} → {params.end}
-        {' · '}Unique users are distinct conversation sessions; resolved means the conversation produced a lead or
+        {' · '}Unique users are distinct visitors, so one person opening several chats counts once; resolved means the conversation produced a lead or
         ended without a handoff.
       </p>
 

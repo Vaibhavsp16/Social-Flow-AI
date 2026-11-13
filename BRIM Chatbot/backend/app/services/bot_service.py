@@ -68,8 +68,17 @@ class BotService:
             personality=bot_in.personality or "Friendly & professional",
             welcome_message=bot_in.welcome_message or "Hi! How can I help you today?",
             status=bot_in.status or "Live",
-            shareable_slug=slug
+            shareable_slug=slug,
+            primary_use_case=getattr(bot_in, "primary_use_case", None) or "general_assistant",
+            response_style=getattr(bot_in, "response_style", None) or "simple_clear",
+            lead_collection=getattr(bot_in, "lead_collection", None) or "when_relevant",
+            human_handoff=getattr(bot_in, "human_handoff", None) or "allow_when_needed",
+            company_name=(getattr(bot_in, "company_name", None) or project.name),
         )
+        if getattr(bot_in, "contact_after_messages", None) is not None:
+            db_bot.contact_after_messages = bot_in.contact_after_messages
+        if getattr(bot_in, "idle_prompt_seconds", None) is not None:
+            db_bot.idle_prompt_seconds = bot_in.idle_prompt_seconds
         db.add(db_bot)
         db.commit()
         db.refresh(db_bot)
@@ -92,6 +101,15 @@ class BotService:
             bot.welcome_message = bot_in.welcome_message.strip()
         if bot_in.status is not None:
             bot.status = bot_in.status
+        # Behaviour settings. Applied generically so a new setting needs no new branch here.
+        for field in (
+            "primary_use_case", "response_style", "lead_collection", "human_handoff",
+            "contact_after_messages", "idle_prompt_seconds", "company_name",
+        ):
+            value = getattr(bot_in, field, None)
+            if value is not None:
+                setattr(bot, field, value)
+
         if bot_in.shareable_slug is not None:
             # Check uniqueness if changed
             new_slug = bot_in.shareable_slug.strip().lower()

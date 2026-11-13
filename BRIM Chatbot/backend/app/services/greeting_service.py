@@ -60,9 +60,13 @@ class GreetingService:
             for code in SUPPORTED_LANGUAGES
         ]
         normalised = candidate.lower().rstrip(" .!?")
-        # "Hi! How can I help you today?" is the platform default with a greeting prefix;
-        # treating it as custom copy would open with the same sentence twice.
-        return not any(phrase and phrase in normalised for phrase in generic)
+        # Only the exact platform default is suppressed: it is the same sentence the greeting would
+        # ask anyway. Anything else was chosen by the owner and must be shown — matching on a
+        # substring meant "Hi! How can I help you today with Real Estate?" was silently replaced by
+        # the generic welcome, which looked like the configured greeting had been ignored.
+        if normalised in generic:
+            return False
+        return not any(phrase and normalised == phrase for phrase in generic)
 
 
 

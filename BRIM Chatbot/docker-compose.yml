@@ -46,6 +46,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brim_password_2026}
       ALLOW_SQLITE_FALLBACK: "false"
       BACKEND_CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
+      # Share links, the /p/{slug} page and the embed snippet are built from this. In this stack the
+      # web app is the container on 8080, not the dev server on 5173.
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:8080}
     ports:
       - "8000:8000"
     depends_on:

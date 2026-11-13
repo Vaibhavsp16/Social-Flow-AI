@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { GoogleButton } from '../components/GoogleButton';
 
 export const Signup = () => {
   const [name, setName] = useState('');
@@ -12,7 +13,7 @@ export const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { signup } = useAuth();
+  const { signup, loginWithGoogle } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -39,6 +40,17 @@ export const Signup = () => {
       setError(err.userMessage || 'Failed to create account.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogle = async (credential) => {
+    setError('');
+    try {
+      await loginWithGoogle(credential);
+      showToast('Account ready — welcome to BRIM AI.');
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      setError(err.userMessage || 'Google sign-in failed. Please try again.');
     }
   };
 
@@ -97,6 +109,16 @@ export const Signup = () => {
           Create Account
         </Button>
       </form>
+
+      <div style={{ textAlign: 'center', margin: '18px 0', color: '#a0a3ae', fontSize: '12px' }}>
+        OR
+      </div>
+
+      <GoogleButton
+        onCredential={handleGoogle}
+        onError={(message) => setError(message)}
+        disabled={loading}
+      />
 
       <p style={{ textAlign: 'center', fontSize: '13px', marginTop: '22px' }}>
         Already have an account?{' '}

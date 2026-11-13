@@ -54,6 +54,20 @@ def bot_analytics(
     return AnalyticsService.bot_report(db, bot.id, start, end)
 
 
+@router.get("/analytics/bots/{bot_id}/live")
+def bot_analytics_live(
+    bot_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cheap counters for a screen that refreshes every few seconds.
+
+    Separate from the full report on purpose: this is polled, so it must not walk every message.
+    """
+    bot = _owned_bot(db, bot_id, current_user)
+    return AnalyticsService.live_report(db, bot.id)
+
+
 @router.get("/reports/{kind}")
 def build_report(
     kind: str,

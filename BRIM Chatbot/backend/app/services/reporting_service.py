@@ -18,7 +18,7 @@ from app.models.bot import Bot
 from app.models.conversation import Conversation, ConversationStatus, Message, MessageSender
 from app.models.lead import Lead
 from app.models.project import Project
-from app.services.analytics_service import AnalyticsService, parse_window
+from app.services.analytics_service import AnalyticsService, parse_window, unique_visitors
 
 
 def _mask(value: Optional[str], keep: int = 3) -> str:
@@ -107,13 +107,18 @@ class ReportingService:
         elif kind == "leads":
             columns = [
                 "lead_id", "created_at", "bot", "name", "phone_masked", "email_masked",
-                "preferred_contact", "intent", "location", "budget_max", "status",
+                "preferred_contact", "preferred_time", "intent", "location", "budget_max",
+                "meeting_requested", "status", "source",
             ]
+            # Admin scope stays masked. The owner's own export is the unmasked one served by
+            # /api/bots/{id}/leads.csv — they need the number to call the person.
             rows = [
                 [
                     lead.id, lead.created_at.isoformat(), bot_names.get(lead.bot_id, ""), lead.name,
                     _mask(lead.phone, 4), _mask(lead.email, 6), lead.preferred_contact,
-                    lead.intent or "", lead.location or "", lead.budget_max or "", lead.status,
+                    lead.preferred_time or "", lead.intent or "", lead.location or "",
+                    lead.budget_max or "", "yes" if lead.meeting_requested else "no",
+                    lead.status, lead.source,
                 ]
                 for lead in leads
             ]
@@ -131,7 +136,7 @@ class ReportingService:
                 bot_resolved = [c for c in bot_convos if resolved(c)]
                 rows.append([
                     bot.id, bot.name, bot.status, len(bot_convos),
-                    len({c.session_id for c in bot_convos}), len(bot_messages),
+                    unique_visitors(bot_convos), len(bot_messages),
                     sum(1 for lead in leads if lead.bot_id == bot.id),
                     sum(1 for c in bot_convos if handoff(c)),
                     round(len(bot_resolved) / len(bot_convos) * 100, 1) if bot_convos else 0.0,
