@@ -88,7 +88,7 @@ class Settings(BaseSettings):
 
     def get_database_url(self) -> str:
         if self.DATABASE_URL:
-            return self.DATABASE_URL
+            return _pin_psycopg2(self.DATABASE_URL)
         # Pin the psycopg2 driver explicitly. SQLAlchemy 2.1 resolves a bare
         # "postgresql://" URL to the psycopg (v3) dialect, which is not installed
         # by requirements.txt, so the connection would silently fail.
@@ -96,6 +96,24 @@ class Settings(BaseSettings):
             f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+
+def _pin_psycopg2(url: str) -> str:
+    """Force the psycopg2 driver onto a Postgres URL.
+
+    Neon hands out ``postgresql://…``, and SQLAlchemy 2.1 resolves that bare form to the psycopg
+    (v3) dialect. requirements.txt installs psycopg2-binary, so the container died at import with
+    ``ModuleNotFoundError: No module named 'psycopg'`` before it ever reached the network. Every
+    hosted Postgres provider supplies the same bare form, so this is normalised here rather than
+    asking whoever deploys to remember a driver prefix.
+    """
+    if not url:
+        return url
+    cleaned = url.strip().strip("\"'").strip()
+    for prefix in ("postgres://", "postgresql://"):
+        if cleaned.startswith(prefix):
+            return "postgresql+psycopg2://" + cleaned[len(prefix):]
+    return cleaned
+
 
 settings = Settings()
 
