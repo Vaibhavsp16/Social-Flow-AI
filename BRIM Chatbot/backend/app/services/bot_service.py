@@ -3,6 +3,11 @@ import uuid
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 from app.models.bot import Bot
+from app.models.conversation import Conversation, Message
+from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.knowledge_source import KnowledgeSource
+from app.models.lead import Lead
+from app.models.meeting import Meeting
 from app.models.project import Project
 from app.schemas.bot import BotCreate, BotUpdate
 
@@ -129,6 +134,32 @@ class BotService:
     @staticmethod
     def delete_bot(db: Session, bot_id: int, user_id: int) -> dict:
         bot = BotService.get_bot_by_id(db, bot_id, user_id)
+
+        # Children are removed explicitly rather than relying on ON DELETE CASCADE. The constraint
+        # on an existing database was created before the cascade was declared, and schema repair
+        # only adds columns — so a bot that had captured a lead returned HTTP 500 and could never
+        # be deleted. Deleting in dependency order works on any schema.
+        conversation_ids = [
+            row[0] for row in db.query(Conversation.id).filter(Conversation.bot_id == bot_id).all()
+        ]
+        if conversation_ids:
+            db.query(Message).filter(Message.conversation_id.in_(conversation_ids)).delete(
+                synchronize_session=False
+            )
+            db.query(Conversation).filter(Conversation.id.in_(conversation_ids)).delete(
+                synchronize_session=False
+            )
+
+        db.query(Meeting).filter(Meeting.bot_id == bot_id).delete(synchronize_session=False)
+        db.query(Lead).filter(Lead.bot_id == bot_id).delete(synchronize_session=False)
+        db.query(KnowledgeChunk).filter(KnowledgeChunk.bot_id == bot_id).delete(
+            synchronize_session=False
+        )
+        db.query(KnowledgeSource).filter(KnowledgeSource.bot_id == bot_id).delete(
+            synchronize_session=False
+        )
+        db.flush()
+
         db.delete(bot)
         db.commit()
         return {"message": "Bot deleted successfully", "id": bot_id}
