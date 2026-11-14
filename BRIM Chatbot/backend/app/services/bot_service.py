@@ -9,6 +9,7 @@ from app.models.knowledge_source import KnowledgeSource
 from app.models.lead import Lead
 from app.models.meeting import Meeting
 from app.models.project import Project
+from app.models.property import Property
 from app.schemas.bot import BotCreate, BotUpdate
 
 def generate_slug(name: str) -> str:
@@ -152,6 +153,9 @@ class BotService:
 
         db.query(Meeting).filter(Meeting.bot_id == bot_id).delete(synchronize_session=False)
         db.query(Lead).filter(Lead.bot_id == bot_id).delete(synchronize_session=False)
+        # Properties are seeded per bot for real-estate projects. SQLite does not enforce foreign
+        # keys by default, so omitting this passed locally and failed on Postgres.
+        db.query(Property).filter(Property.bot_id == bot_id).delete(synchronize_session=False)
         db.query(KnowledgeChunk).filter(KnowledgeChunk.bot_id == bot_id).delete(
             synchronize_session=False
         )
