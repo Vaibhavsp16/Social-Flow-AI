@@ -55,14 +55,16 @@ def add_website_direct(
     bot_id: int = Form(...),
     url: str = Form(...),
     name: str = Form(None),
-    max_pages: int = Form(1),
+    # Crawl by default: one page produced a bot that could only talk about the homepage.
+    max_pages: int = Form(30),
+    max_depth: int = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     Direct endpoint for adding a website URL.
     """
-    website_in = WebsiteCreate(url=url, name=name, max_pages=max_pages)
+    website_in = WebsiteCreate(url=url, name=name, max_pages=max_pages, max_depth=max_depth)
     return KnowledgeService.add_website(db=db, bot_id=bot_id, website_in=website_in, user_id=current_user.id)
 
 @router.post("/bots/{bot_id}/knowledge/social", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)

@@ -342,7 +342,9 @@ class KnowledgeService:
 
         try:
             extracted_text, metadata = DocumentProcessor.crawl_website(
-                website_in.url, max_pages=getattr(website_in, "max_pages", 1) or 1
+                website_in.url,
+                max_pages=getattr(website_in, "max_pages", None) or DocumentProcessor.MAX_CRAWL_PAGES,
+                max_depth=getattr(website_in, "max_depth", None),
             )
 
             # Chunk page by page so every chunk keeps the URL it came from, even in a

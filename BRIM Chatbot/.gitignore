@@ -75,3 +75,6 @@ shots/
 screenshots/
 findings-*.md
 check_c_embed_*.png
+
+# Local scratch: uploaded screenshots and temp artifacts
+temp/

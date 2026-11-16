@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -649,13 +650,34 @@ class DocumentProcessor:
         "awb-off-canvas", "elementor-popup",
     )
 
+    # Meta fields worth keeping when the visible body is thin (JS-rendered sites).
+    STRUCTURED_META_NAMES = {
+        "description", "og:description", "og:title", "og:site_name", "twitter:description",
+    }
+
     # Non-HTML resources that must never be queued as crawl targets.
     SKIP_LINK_EXTENSIONS = {
         ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".pdf", ".zip", ".rar",
         ".mp4", ".mp3", ".mov", ".css", ".js", ".xml", ".json", ".woff", ".woff2", ".ttf",
     }
 
-    MAX_CRAWL_PAGES = 12
+    # A business site is usually 10-40 real pages. Twelve was too low to reach product or about
+    # pages on a shop, so the crawl stopped at whatever the homepage linked to.
+    MAX_CRAWL_PAGES = 40
+    # Deep enough to reach a sitemap child's children, shallow enough to stay topical.
+    MAX_CRAWL_DEPTH = 2
+    # Wall-clock ceiling for one ingest. Without it, 40 slow pages at a 20s timeout each could hold
+    # a request open for ten minutes.
+    CRAWL_TIME_BUDGET_SECONDS = 75
+    # Total extracted text ceiling. Beyond this the extra pages add cost to every question without
+    # adding answers.
+    MAX_CRAWL_CHARS = 400_000
+    # Paths that are chrome, commerce plumbing or duplicates rather than knowledge.
+    CRAWL_SKIP_PATHS = (
+        "/login", "/signin", "/sign-in", "/register", "/my-account", "/account", "/wishlist",
+        "/compare", "/cart", "/checkout", "/privacy", "/terms", "/refund",
+        "/shipping-policy", "/cookie", "/search", "/404", "/sitemap",
+    )
     # Below this many characters a page is treated as unreadable rather than as knowledge.
     MIN_CRAWL_CHARS = 120
     # A PDF page with less selectable text than this is treated as image-led and transcribed.
@@ -710,7 +732,9 @@ class DocumentProcessor:
         parsed = urlparse(link)
         if parsed.scheme not in ("http", "https"):
             return False
-        if parsed.netloc.lower() != base.netloc.lower():
+        # Treat www. and the apex domain as the same site. Many hosts redirect the apex to www,
+        # and a strict netloc comparison then rejected every link on the page.
+        if cls._bare_host(parsed.netloc) != cls._bare_host(base.netloc):
             return False
         lowered = parsed.path.lower()
         if any(lowered.endswith(ext) for ext in cls.SKIP_LINK_EXTENSIONS):
@@ -747,6 +771,147 @@ class DocumentProcessor:
             scope = seed_path + "/"
 
         return path.startswith(scope) and path.rstrip("/") != seed_path.rstrip("/")
+
+    @staticmethod
+    def _bare_host(netloc: str) -> str:
+        host = (netloc or "").lower().split(":")[0]
+        return host[4:] if host.startswith("www.") else host
+
+    @classmethod
+    def _meta_and_jsonld(cls, soup: "BeautifulSoup") -> str:
+        """
+        Text that survives on JavaScript-heavy sites: meta descriptions and structured data.
+
+        A shop built on a JS framework renders its copy client-side, so the HTML body holds almost
+        nothing while the meta description and JSON-LD carry the product and business facts. Reading
+        those turned a 191-character page into usable knowledge.
+        """
+        parts: List[str] = []
+        for tag in soup.find_all("meta"):
+            name = (tag.get("name") or tag.get("property") or "").lower()
+            if name in cls.STRUCTURED_META_NAMES:
+                content = (tag.get("content") or "").strip()
+                if len(content) > 3:
+                    parts.append(content)
+
+        for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+            raw = script.string or script.get_text() or ""
+            if not raw.strip():
+                continue
+            try:
+                data = json.loads(raw)
+            except Exception:  # noqa: BLE001 - malformed structured data is common
+                continue
+            stack = [data]
+            while stack and len(parts) < 120:
+                node = stack.pop()
+                if isinstance(node, dict):
+                    stack.extend(node.values())
+                elif isinstance(node, list):
+                    stack.extend(node)
+                elif isinstance(node, str):
+                    value = re.sub(r"\s+", " ", node).strip()
+                    if 3 < len(value) < 600 and value not in parts:
+                        parts.append(value)
+
+        # Dedupe while keeping order.
+        deduped, seen = [], set()
+        for part in parts:
+            key = part.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(part)
+        return "\n".join(deduped)[:6000]
+
+    @classmethod
+    def _is_junk_path(cls, link: str) -> bool:
+        """Account, checkout, policy and search pages: chrome, not knowledge."""
+        path = urlparse(link).path.lower().rstrip("/") or "/"
+        if any(path == junk or path.startswith(junk + "/") for junk in cls.CRAWL_SKIP_PATHS):
+            return True
+        # Policy pages carry suffixes ("/privacy-policy", "/terms-of-service"). Prefix matching is
+        # limited to these because a prefix on "/cart" would also swallow "/cartoon".
+        return any(path.startswith(prefix) for prefix in ("/privacy", "/terms", "/refund", "/cookie"))
+
+    @classmethod
+    def _rank_links(cls, links: List[str], base: Any) -> List[str]:
+        """
+        Same-host content links, the seed's own section first.
+
+        Ranking rather than filtering: a shop's homepage links to /about and /products, which are
+        siblings of /, and the old descendant test rejected both.
+        """
+        ordered: List[str] = []
+        seen = set()
+        ranked = []
+        for link in links:
+            if not cls._is_crawlable(link, base) or cls._is_junk_path(link):
+                continue
+            normalised = cls._normalise_url(link)
+            if not normalised or normalised in seen:
+                continue
+            seen.add(normalised)
+            # Descendants of the seed path are the most topical, so they go first.
+            ranked.append((0 if cls._is_descendant(link, base) else 1, normalised))
+        for _, link in sorted(ranked, key=lambda pair: pair[0]):
+            ordered.append(link)
+        return ordered[:20]
+
+    @classmethod
+    def _sitemap_urls(cls, client: httpx.Client, base: Any) -> List[str]:
+        """
+        Page URLs from the site's sitemap, best effort.
+
+        A sitemap is the only reliable way to find pages that the homepage does not link to, which
+        is common on catalogue and CMS sites. Any failure here is non-fatal: the link walk still
+        runs.
+        """
+        found: List[str] = []
+        candidates = ["/sitemap.xml", "/sitemap_index.xml", "/wp-sitemap.xml"]
+        try:
+            for path in candidates:
+                if len(found) >= 60:
+                    break
+                url = urljoin(f"{base.scheme}://{base.netloc}", path)
+                try:
+                    response = client.get(assert_safe_url(url), headers=cls.REQUEST_HEADERS)
+                except Exception:
+                    continue
+                if response.status_code != 200 or "<" not in response.text[:200]:
+                    continue
+
+                locs = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", response.text, flags=re.I)
+                if not locs:
+                    continue
+
+                if "<sitemapindex" in response.text[:1000]:
+                    # Index of sitemaps: read the first few children, not all of them.
+                    for child in locs[:3]:
+                        try:
+                            sub = client.get(assert_safe_url(child), headers=cls.REQUEST_HEADERS)
+                            if sub.status_code == 200:
+                                locs.extend(
+                                    re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", sub.text, flags=re.I)
+                                )
+                        except Exception:
+                            continue
+
+                for loc in locs:
+                    if "sitemap" in loc.lower():
+                        continue
+                    if not cls._is_crawlable(loc, base) or cls._is_junk_path(loc):
+                        continue
+                    normalised = cls._normalise_url(loc)
+                    if normalised and normalised not in found:
+                        found.append(normalised)
+                    if len(found) >= 60:
+                        break
+                if found:
+                    break
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Sitemap discovery skipped: %s", exc)
+        return found
 
     # Publish timestamps and click labels are interface, not knowledge.
     NOISE_LINE_PATTERNS = (
@@ -789,18 +954,23 @@ class DocumentProcessor:
         soup = BeautifulSoup(html, "html.parser")
         page_title = soup.title.get_text(strip=True) if soup.title else url
 
-        for element in soup(cls.NOISE_TAGS):
-            element.decompose()
-        for element in soup.find_all(attrs={"role": ["navigation", "banner", "contentinfo", "search"]}):
-            element.decompose()
-        cls._strip_chrome(soup)
+        # Read description/structured data first: they live in <head>, which the chrome stripping
+        # below is entitled to remove.
+        structured = cls._meta_and_jsonld(soup)
 
-        # Collect internal links before shrinking the tree to the main region.
+        # Collect links before anything is decomposed, so navigation links still lead the crawl
+        # into the rest of the site.
         links = []
         for anchor in soup.find_all("a", href=True):
             absolute = urljoin(url, anchor["href"])
             if absolute not in links:
                 links.append(absolute)
+
+        for element in soup(cls.NOISE_TAGS):
+            element.decompose()
+        for element in soup.find_all(attrs={"role": ["navigation", "banner", "contentinfo", "search"]}):
+            element.decompose()
+        cls._strip_chrome(soup)
 
         container = soup.find("main") or soup.find("article") or soup.body or soup
         raw_text = container.get_text(separator="\n")
@@ -817,43 +987,100 @@ class DocumentProcessor:
             seen_lines.add(key)
             kept_lines.append(stripped)
 
+        body_text = cls.clean_text("\n".join(kept_lines))
+        # A thin body means the copy is rendered client-side. Fall back to the description and
+        # structured data rather than storing a page that can only produce refusals.
+        if len(body_text) < 400 and structured:
+            body_text = cls.clean_text(f"{body_text}\n{structured}") if body_text else structured
+
         return {
             "url": url,
             "title": page_title,
-            "text": cls.clean_text("\n".join(kept_lines)),
+            "text": body_text,
             "links": links,
         }
 
     @classmethod
-    def crawl_website(cls, url: str, max_pages: int = 1) -> Tuple[str, Dict[str, Any]]:
+    def crawl_website(
+        cls,
+        url: str,
+        max_pages: Optional[int] = None,
+        max_depth: Optional[int] = None,
+    ) -> Tuple[str, Dict[str, Any]]:
         """
-        Crawl one page, or the seed page plus its internal links when max_pages > 1.
+        Crawl the site the seed URL belongs to, breadth-first, and return its combined text.
 
-        Only same-site pages linked from the seed page are followed (depth 1), which keeps the
-        crawl bounded and topical instead of harvesting the whole site. Returns the combined
-        text plus per-page metadata.
+        Defaults to many pages because a business site is many pages: fetching only the homepage
+        gave the bot a paragraph about the company and nothing about products, branches or
+        policies, which is why every question past the homepage was answered with a refusal.
+
+        Scope is the whole host, not the seed's sub-path. Requiring every URL to sit under the
+        seed path meant that starting at ``/about`` crawled one page, and starting at a product
+        page crawled nothing else. Junk paths are filtered instead, and links are ranked so the
+        seed's own section is fetched first.
+
+        Depth is capped at 2 and the run has a wall-clock budget, so this stays bounded even on a
+        site with thousands of links.
         """
         base = urlparse(url)
         if base.scheme not in ("http", "https") or not base.netloc:
             raise ValueError("Please provide a full http:// or https:// URL.")
 
-        max_pages = max(1, min(int(max_pages or 1), cls.MAX_CRAWL_PAGES))
+        max_pages = max(1, min(int(max_pages or cls.MAX_CRAWL_PAGES), cls.MAX_CRAWL_PAGES))
+        max_depth = max(0, min(int(max_depth if max_depth is not None else cls.MAX_CRAWL_DEPTH),
+                               cls.MAX_CRAWL_DEPTH))
         seed = cls._normalise_url(url)
         if not seed:
             raise ValueError("Please provide a full http:// or https:// URL.")
 
         pages: List[Dict[str, Any]] = []
-        visited = set()
+        queued = {seed}
+        seen_text = set()
+        truncated = False
+        deadline = time.monotonic() + cls.CRAWL_TIME_BUDGET_SECONDS
+        total_chars = 0
 
         # Redirects are followed manually so every hop is re-validated (SSRF via an open
         # redirect or a DNS name that flips to a private address after the first check).
         with httpx.Client(timeout=20.0, follow_redirects=False) as client:
-            queue: List[Tuple[str, int]] = [(seed, 0)]
-            while queue and len(pages) < max_pages:
-                current, depth = queue.pop(0)
-                if current in visited:
-                    continue
-                visited.add(current)
+            # The seed is fetched first because the site may redirect (pateljewellers.com ->
+            # www.pateljewellers.com). Judging later links against the original host rejected
+            # every page on the site, which is why a crawl of 30 returned exactly one.
+            html, status_code, final_url = cls._fetch_html(client, seed)
+            scope = urlparse(final_url)
+            if scope.netloc and scope.netloc.lower() != base.netloc.lower():
+                logger.info("Crawl scope follows redirect: %s -> %s", base.netloc, scope.netloc)
+
+            page = cls._page_text(html, final_url)
+            page["status_code"] = status_code
+            if not page["text"]:
+                raise ValueError(
+                    "No readable text could be extracted from this URL. The page may be blocked, "
+                    "empty, or require JavaScript rendering."
+                )
+            pages.append(page)
+            total_chars += len(page["text"])
+            seen_text.add(page["text"][:400])
+
+            queue: List[Tuple[str, int]] = []
+            # A sitemap lists canonical pages even when the homepage links few of them.
+            for discovered in cls._sitemap_urls(client, scope):
+                if discovered not in queued:
+                    queued.add(discovered)
+                    queue.append((discovered, 1))
+            for link in cls._rank_links(page["links"], scope):
+                normalised = cls._normalise_url(link)
+                if normalised and normalised not in queued and normalised != cls._normalise_url(final_url):
+                    queued.add(normalised)
+                    queue.append((normalised, 1))
+
+            index = 0
+            while index < len(queue) and len(pages) < max_pages:
+                if time.monotonic() > deadline or total_chars >= cls.MAX_CRAWL_CHARS:
+                    truncated = True
+                    break
+                current, depth = queue[index]
+                index += 1
                 try:
                     html, status_code, final_url = cls._fetch_html(client, current)
                 except Exception as exc:
@@ -866,20 +1093,27 @@ class DocumentProcessor:
                 page["status_code"] = status_code
                 if not page["text"]:
                     continue
-                pages.append(page)
 
-                if depth == 0 and max_pages > 1:
-                    # Only pages *under* the seed path are followed. Crawling sibling sections
-                    # (e.g. /digital-marketing-agency/ while starting at /industry/real-estate/)
-                    # pulls in unrelated content that then competes with the real knowledge.
-                    for link in page["links"]:
-                        if not cls._is_crawlable(link, base):
-                            continue
-                        if not cls._is_descendant(link, base):
-                            continue
+                # Near-identical pages (language variants, colour/filter duplicates) add cost to
+                # every question without adding an answer.
+                fingerprint = page["text"][:400]
+                if fingerprint in seen_text:
+                    continue
+                seen_text.add(fingerprint)
+
+                pages.append(page)
+                total_chars += len(page["text"])
+
+                if depth < max_depth:
+                    for link in cls._rank_links(page["links"], scope):
                         normalised = cls._normalise_url(link)
-                        if normalised and normalised not in visited:
-                            queue.append((normalised, 1))
+                        if not normalised or normalised in queued:
+                            continue
+                        if len(queued) >= max_pages * 4:
+                            truncated = True
+                            break
+                        queued.add(normalised)
+                        queue.append((normalised, depth + 1))
 
         if not pages:
             raise ValueError(
@@ -906,6 +1140,15 @@ class DocumentProcessor:
             "page_title": pages[0]["title"],
             "status_code": pages[0].get("status_code"),
             "pages_crawled": len(pages),
+            "discovered_urls": len(queued),
+            "truncated": truncated,
+            # Surfaced so the UI can say "only 1 page was readable" instead of letting the owner
+            # assume the whole site is in the bot's head.
+            "coverage_warning": (
+                None
+                if len(pages) > 1
+                else "Only the seed page had readable text. Other pages may need JavaScript."
+            ),
             "pages": [
                 {
                     "url": page["url"],

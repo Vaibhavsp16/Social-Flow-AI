@@ -28,7 +28,7 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
   const [submittingInstruction, setSubmittingInstruction] = useState(false);
 
   // Forms State
-  const [websiteForm, setWebsiteForm] = useState({ url: '', name: '', maxPages: 5 });
+  const [websiteForm, setWebsiteForm] = useState({ url: '', name: '', maxPages: 30 });
   const [industryPacks, setIndustryPacks] = useState([]);
   const [industryPackKey, setIndustryPackKey] = useState('real-estate');
   const [botIndustry, setBotIndustry] = useState(null);
@@ -155,7 +155,8 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
     setSubmittingWebsite(true);
     try {
       const source = await knowledgeService.addWebsite(botId, websiteForm);
-      const pages = source?.metadata_json ? JSON.parse(source.metadata_json).pages_crawled : null;
+      const meta = source?.metadata_json ? JSON.parse(source.metadata_json) : {};
+      const pages = meta.pages_crawled || source?.pages_crawled || null;
       showToast(
         pages
           ? `Crawled ${pages} page${pages === 1 ? '' : 's'} and indexed ${source.chunks_count} chunks!`
@@ -624,7 +625,7 @@ export const KnowledgeManager = ({ botId, onSourcesChange }) => {
                       onChange={(e) =>
                         setWebsiteForm({
                           ...websiteForm,
-                          maxPages: Math.max(1, Math.min(12, Number(e.target.value) || 1)),
+                          maxPages: Math.max(1, Math.min(40, Number(e.target.value) || 1)),
                         })
                       }
                     />

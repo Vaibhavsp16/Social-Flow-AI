@@ -1,13 +1,17 @@
+import json
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict, HttpUrl, field_validator
+from pydantic import BaseModel, Field, ConfigDict, HttpUrl, field_validator, model_validator
 from app.core.constants import KnowledgeSourceType, ProcessingStatus
 
 class WebsiteCreate(BaseModel):
     url: str = Field(..., description="Website URL to ingest")
     name: Optional[str] = None
-    # 1 = only the given page. >1 follows same-site links found on it (bounded crawl).
-    max_pages: Optional[int] = Field(default=1, ge=1, le=12)
+    # 1 = only the given page. The default crawls the site, because a bot fed one page answers
+    # nothing beyond it. Depth and a time budget still bound the work.
+    max_pages: Optional[int] = Field(default=30, ge=1, le=40)
+    # 0 = seed page only, 1 = its links, 2 = their links. Omitted means the crawler default.
+    max_depth: Optional[int] = Field(default=None, ge=0, le=2)
 
     @field_validator("url")
     @classmethod
@@ -74,4 +78,22 @@ class KnowledgeSourceResponse(BaseModel):
     extracted_text_preview: Optional[str] = None
     extracted_text: Optional[str] = None
 
+    # Crawl coverage, lifted out of metadata_json so a client does not have to parse a string to
+    # find out whether the site was actually read or only its homepage.
+    pages_crawled: Optional[int] = None
+    character_count: Optional[int] = None
+    coverage_warning: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _lift_crawl_summary(self):
+        try:
+            data = json.loads(self.metadata_json or "{}")
+        except (TypeError, ValueError):
+            return self
+        if isinstance(data, dict):
+            self.pages_crawled = data.get("pages_crawled", self.pages_crawled)
+            self.character_count = data.get("character_count", self.character_count)
+            self.coverage_warning = data.get("coverage_warning", self.coverage_warning)
+        return self
